@@ -1,6 +1,9 @@
-import { supabase, supabaseAdmin } from "../config/supabase";
-import { getRoomCurrentStreaks } from "./dailyGoal.service";
-import { requireUserHasTasks } from "./userTask.service";
+﻿import { supabase, supabaseAdmin } from "../config/supabase";
+import {
+  getRoomCurrentStreaks,
+  hasDailyGoalForToday,
+} from "./dailyGoal.service";
+import { userHasTasks } from "./userTask.service";
 import {
   CreateRoomInput,
   JoinRoomResult,
@@ -9,6 +12,7 @@ import {
   RoomMember,
   RoomRow,
 } from "../types/room.types";
+import { DailyGoalRequirementError } from "../types/dailyGoal.types";
 
 const ROOM_COLUMNS =
   "id, room_code, name, exam_category, description, creator_user_id, created_at, updated_at";
@@ -23,6 +27,14 @@ const toRoom = (row: RoomRow): Room => ({
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
+
+const ensureUserEligible = async (userId: string, actionMessage: string) => {
+  const hasGoals = await hasDailyGoalForToday(userId);
+  const hasTasks = await userHasTasks(userId);
+  if (!hasGoals && !hasTasks) {
+    throw new DailyGoalRequirementError(actionMessage);
+  }
+};
 
 export const listRooms = async (): Promise<Room[]> => {
   const { data, error } = await supabase
@@ -66,7 +78,10 @@ export const getRoomByCode = async (roomCode: string): Promise<Room | null> => {
 };
 
 export const createRoom = async (input: CreateRoomInput): Promise<Room> => {
-  await requireUserHasTasks(input.creatorUserId);
+  await ensureUserEligible(
+    input.creatorUserId,
+    "Add at least one daily goal before creating a room."
+  );
 
   const { data, error } = await supabaseAdmin
     .from("rooms")
@@ -103,7 +118,10 @@ export const joinRoom = async (
   roomId: string,
   userId: string
 ): Promise<JoinRoomResult | null> => {
-  await requireUserHasTasks(userId);
+  await ensureUserEligible(
+    userId,
+    "Add at least one daily goal before joining a room."
+  );
 
   const room = await getRoomById(roomId);
 
@@ -231,7 +249,45 @@ export const isRoomMember = async (
   return Boolean(data);
 };
 
+export class MockExamLifecycleActiveError extends Error {
+  statusCode = 409;
+
+  constructor() {
+    super("You cannot leave this Study Room while your mock-exam evaluation is still in progress.");
+    this.name = "MockExamLifecycleActiveError";
+  }
+}
+
+const hasActiveMockExamLifecycle = async (roomId: string, userId: string) => {
+  const { data: sessions, error: sessionsError } = await supabaseAdmin
+    .from("mock_sessions")
+    .select("id, ends_at, status")
+    .eq("room_id", roomId);
+  if (sessionsError) throw sessionsError;
+
+  const activeSessions = (sessions ?? []).filter((session) => (
+    session.status === "live"
+    && session.ends_at
+    && Date.now() < Date.parse(session.ends_at)
+  ));
+  const sessionIds = activeSessions.map((session) => session.id);
+  if (!sessionIds.length) return false;
+
+  const { data: attempts, error: attemptsError } = await supabaseAdmin
+    .from("participant_attempts")
+    .select("id, status")
+    .in("session_id", sessionIds)
+    .eq("participant_id", userId);
+  if (attemptsError) throw attemptsError;
+
+  return (attempts ?? []).some((attempt) => attempt.status === "in_progress");
+};
+
 export const leaveRoom = async (roomId: string, userId: string): Promise<void> => {
+  if (await hasActiveMockExamLifecycle(roomId, userId)) {
+    throw new MockExamLifecycleActiveError();
+  }
+
   const { error } = await supabaseAdmin
     .from("room_members")
     .delete()

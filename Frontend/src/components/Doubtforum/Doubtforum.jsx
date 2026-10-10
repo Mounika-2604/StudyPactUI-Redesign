@@ -1,196 +1,676 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import './DoubtForum.css';
+import {
+    ArrowLeft,
+    HelpCircle,
+    Paperclip,
+    Send,
+    MessageSquare,
+    CheckCircle2,
+    Clock,
+    X,
+    Image as ImageIcon,
+    Shield,
+    Sparkles,
+    Search,
+    BookOpen
+} from 'lucide-react';
+import {
+    createDoubt,
+    createDoubtReply,
+    getDoubts,
+    uploadDoubtImages,
+} from '../../services/doubtService';
+import { supabase } from '../../services/supabaseClient';
+import './Doubtforum.css';
 
-const ROOMS_BY_ID = {
-    r1: { examTag: 'UPSC', title: 'Prelims Revision Pact' },
-    r2: { examTag: 'GATE', title: 'CS Core Subjects' },
-    r3: { examTag: 'NEET', title: 'Biology Daily Grind' },
-    r4: { examTag: 'JEE', title: 'Physics Problem Set' },
-};
+const MAX_IMAGE_COUNT = 3;
+const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set([
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/gif',
+]);
 
-const INITIAL_DOUBTS = [
-    {
-        id: 'd1',
-        author: 'Kavya',
-        text: "Can someone clarify the difference between Article 32 and Article 226? I keep mixing up when each applies.",
-        hasImage: false,
-        createdAt: '2 hours ago',
-        replies: [
-            { id: 'd1-r1', author: 'Rahul', text: 'Article 32 is a fundamental right itself (only for FR violations), 226 is broader and available in High Courts.', createdAt: '1 hour ago' },
-            { id: 'd1-r2', author: 'Sanjay', text: 'Also 226 covers legal rights too, not just fundamental ones — that\'s the key distinction.', createdAt: '45 min ago' },
-        ],
-    },
-    {
-        id: 'd2',
-        author: 'Divya',
-        text: 'Uploading my handwritten solution for this Polity MCQ — not sure where I went wrong. Attached below.',
-        hasImage: true,
-        createdAt: '5 hours ago',
-        replies: [],
-    },
-    {
-        id: 'd3',
-        author: 'Nikhil',
-        text: 'What\'s the best way to remember the order of Fundamental Duties?',
-        hasImage: false,
-        createdAt: '1 day ago',
-        replies: [
-            { id: 'd3-r1', author: 'Anu', text: 'Try grouping them by theme — nation-related, environment-related, personal conduct. Easier to recall in clusters.', createdAt: '20 hours ago' },
-        ],
-    },
+const QUICK_QUERY_TOPICS = [
+    'Syllabus Interpretation',
+    'PYQ Derivation',
+    'Formula Clarification',
+    'Ethics Case Analysis',
 ];
+
+const readImage = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve({
+        data: String(reader.result).split(',')[1],
+        mimeType: file.type,
+    });
+    reader.onerror = () => reject(new Error('Unable to read the selected image.'));
+    reader.readAsDataURL(file);
+});
+
+const formatDoubt = (doubt) => ({
+    id: doubt.id,
+    author: doubt.authorName || 'Scholar',
+    text: doubt.content,
+    images: doubt.images || [],
+    createdAt: doubt.createdAt,
+    replies: (doubt.replies || []).map((reply) => ({
+        id: reply.id,
+        author: reply.authorName || 'Scholar',
+        text: reply.content,
+        createdAt: reply.createdAt,
+    })),
+});
 
 const DoubtForum = () => {
     const { id } = useParams();
-    const room = ROOMS_BY_ID[id] || { examTag: 'UPSC', title: 'Study Room' };
 
-    const [doubts, setDoubts] = useState(INITIAL_DOUBTS);
+    const [doubts, setDoubts] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
+    const [realtimeError, setRealtimeError] = useState('');
     const [draftText, setDraftText] = useState('');
-    const [draftImage, setDraftImage] = useState(null);
+    const [draftImages, setDraftImages] = useState([]);
+    const [posting, setPosting] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [replyingId, setReplyingId] = useState(null);
+    const [postError, setPostError] = useState('');
     const [replyDrafts, setReplyDrafts] = useState({});
     const [openReplyId, setOpenReplyId] = useState(null);
+    const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'unanswered' | 'with_images'
+    const [activeLightboxImg, setActiveLightboxImg] = useState(null);
+    const realtimeRetryTimerRef = useRef(null);
+    const realtimeRetryCountRef = useRef(0);
 
-    const handlePostDoubt = (e) => {
-        e.preventDefault();
-        if (!draftText.trim()) return;
-        const newDoubt = {
-            id: `d${Date.now()}`,
-            author: 'You',
-            text: draftText.trim(),
-            hasImage: Boolean(draftImage),
-            createdAt: 'just now',
-            replies: [],
+    useEffect(() => {
+        let isCurrent = true;
+        let channel = null;
+
+        const replaceDoubtFromServer = async (doubtId) => {
+            try {
+                const fetchedDoubts = await getDoubts(id);
+                if (!isCurrent) return;
+
+                const formattedDoubts = fetchedDoubts.map(formatDoubt);
+                if (doubtId && !formattedDoubts.some((doubt) => doubt.id === doubtId)) {
+                    return;
+                }
+
+                setDoubts(formattedDoubts);
+                setRealtimeError('');
+            } catch (error) {
+                if (isCurrent) {
+                    setRealtimeError(error.message || 'Unable to resynchronize forum updates.');
+                }
+            }
         };
-        setDoubts((prev) => [newDoubt, ...prev]);
-        setDraftText('');
-        setDraftImage(null);
+
+        const subscribeToDoubtUpdates = () => {
+            if (!isCurrent) return;
+            if (!supabase) {
+                setRealtimeError('Realtime is not configured for this environment.');
+                return;
+            }
+
+            const subscribedChannel = supabase
+                .channel(`doubt-forum:${id}`)
+                .on(
+                    'postgres_changes',
+                    {
+                        event: 'INSERT',
+                        schema: 'public',
+                        table: 'doubts',
+                        filter: `room_id=eq.${id}`,
+                    },
+                    ({ new: newDoubt }) => {
+                        if (!newDoubt?.id) return;
+                        void replaceDoubtFromServer(newDoubt.id);
+                    },
+                )
+                .on(
+                    'postgres_changes',
+                    {
+                        event: 'INSERT',
+                        schema: 'public',
+                        table: 'doubt_replies',
+                    },
+                    ({ new: newReply }) => {
+                        if (!newReply?.id || !newReply.doubt_id) return;
+                        void replaceDoubtFromServer(newReply.doubt_id);
+                    },
+                );
+
+            channel = subscribedChannel;
+            subscribedChannel.subscribe((status) => {
+                if (!isCurrent) return;
+
+                if (status === 'SUBSCRIBED') {
+                    return;
+                }
+
+                if (
+                    status !== 'CHANNEL_ERROR' &&
+                    status !== 'TIMED_OUT' &&
+                    status !== 'CLOSED'
+                ) {
+                    return;
+                }
+
+                if (
+                    realtimeRetryCountRef.current >= 3 ||
+                    realtimeRetryTimerRef.current
+                ) return;
+                realtimeRetryCountRef.current += 1;
+                const retryDelay = realtimeRetryCountRef.current * 1000;
+                realtimeRetryTimerRef.current = window.setTimeout(async () => {
+                    realtimeRetryTimerRef.current = null;
+                    if (!isCurrent) return;
+                    await supabase.removeChannel(subscribedChannel);
+                    await replaceDoubtFromServer();
+                    subscribeToDoubtUpdates();
+                }, retryDelay);
+            });
+        };
+
+        const loadDoubts = async () => {
+            setLoading(true);
+            setLoadError('');
+
+            try {
+                const fetchedDoubts = await getDoubts(id);
+                if (!isCurrent) return;
+
+                setDoubts(fetchedDoubts.map(formatDoubt));
+                setRealtimeError('');
+                subscribeToDoubtUpdates();
+            } catch (error) {
+                if (isCurrent) {
+                    setLoadError(error.message || 'Unable to load doubts.');
+                }
+            } finally {
+                if (isCurrent) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        void loadDoubts();
+
+        return () => {
+            isCurrent = false;
+            if (realtimeRetryTimerRef.current) {
+                window.clearTimeout(realtimeRetryTimerRef.current);
+            }
+            realtimeRetryTimerRef.current = null;
+            realtimeRetryCountRef.current = 0;
+            if (channel) {
+                void supabase?.removeChannel(channel);
+            }
+        };
+    }, [id]);
+
+    const handlePostDoubt = async (e) => {
+        e.preventDefault();
+        const content = draftText.trim();
+        if (!content || posting) return;
+
+        setPosting(true);
+        setPostError('');
+
+        try {
+            const doubt = await createDoubt(id, content);
+            let images = [];
+            if (draftImages.length > 0) {
+                setUploading(true);
+                const imagePayloads = await Promise.all(draftImages.map(readImage));
+                images = await uploadDoubtImages(id, doubt.id, imagePayloads);
+            }
+            setDoubts((prev) => [{
+                id: doubt.id,
+                author: 'You',
+                text: doubt.content,
+                images,
+                createdAt: 'just now',
+                replies: [],
+            }, ...prev]);
+            setDraftText('');
+            setDraftImages([]);
+        } catch (error) {
+            setPostError(error.message || 'Unable to post your doubt.');
+        } finally {
+            setUploading(false);
+            setPosting(false);
+        }
     };
 
-    const handleReplySubmit = (doubtId) => {
-        const text = (replyDrafts[doubtId] || '').trim();
-        if (!text) return;
-        setDoubts((prev) =>
-            prev.map((d) =>
-                d.id === doubtId
-                    ? { ...d, replies: [...d.replies, { id: `${doubtId}-${Date.now()}`, author: 'You', text, createdAt: 'just now' }] }
-                    : d
-            )
-        );
-        setReplyDrafts((prev) => ({ ...prev, [doubtId]: '' }));
-        setOpenReplyId(null);
+    const handleImageChange = (event) => {
+        const selectedFiles = Array.from(event.target.files || []);
+        if (!selectedFiles.length) return;
+
+        if (selectedFiles.length > MAX_IMAGE_COUNT) {
+            setPostError(`You can attach up to ${MAX_IMAGE_COUNT} images.`);
+            event.target.value = '';
+            return;
+        }
+
+        const invalidFile = selectedFiles.find((file) => (
+            !ALLOWED_IMAGE_TYPES.has(file.type) || file.size > MAX_IMAGE_BYTES
+        ));
+        if (invalidFile) {
+            setPostError('Images must be JPEG, PNG, WebP, or GIF files of 3 MB or less.');
+            event.target.value = '';
+            return;
+        }
+
+        setPostError('');
+        setDraftImages(selectedFiles);
     };
+
+    const handleReplySubmit = async (doubtId) => {
+        const text = (replyDrafts[doubtId] || '').trim();
+        const doubt = doubts.find((item) => item.id === doubtId);
+        if (!text || !doubt || replyingId === doubtId) return;
+
+        setReplyingId(doubtId);
+        setPostError('');
+
+        try {
+            const reply = await createDoubtReply(id, doubtId, text);
+            const formattedReply = {
+                id: reply.id,
+                author: reply.authorName || 'Scholar',
+                text: reply.content,
+                createdAt: reply.createdAt,
+            };
+            setDoubts((prev) =>
+                prev.map((d) =>
+                    d.id === doubtId
+                        ? { ...d, replies: [...d.replies, formattedReply] }
+                        : d
+                )
+            );
+            setReplyDrafts((prev) => ({ ...prev, [doubtId]: '' }));
+            setOpenReplyId(null);
+        } catch (error) {
+            setPostError(error.message || 'Unable to post your reply.');
+        } finally {
+            setReplyingId(null);
+        }
+    };
+
+    const filteredDoubts = doubts.filter((d) => {
+        if (activeFilter === 'unanswered') return d.replies.length === 0;
+        if (activeFilter === 'with_images') return d.images && d.images.length > 0;
+        return true;
+    });
 
     return (
-        <div className="df-page">
-
-            <header className="df-topbar">
-                <div className="df-room-info">
-                    <span className="df-badge">{room.examTag}</span>
-                    <h1 className="df-title">Doubt Forum</h1>
-                    <span className="df-room-name">— {room.title}</span>
+        <div className="sp-tribunal-page">
+            {/* ================================================================
+                TOP TRIBUNAL COCKPIT BAR
+                ================================================================ */}
+            <header className="sp-tribunal-bar">
+                <div className="sp-tribunal-bar-left">
+                    <Link to={`/study-room/${id}`} className="sp-tribunal-back-btn">
+                        <ArrowLeft size={16} />
+                        <span>Return to Chamber</span>
+                    </Link>
+                    <div className="sp-tribunal-chamber-tag">
+                        CHAMBER #{id?.slice(0, 8) || 'MAIN'}
+                    </div>
                 </div>
-                <Link to={`/study-room/${id}`} className="df-link-btn">Back to room</Link>
+
+                <div className="sp-tribunal-bar-center">
+                    <span className="sp-tribunal-seal">§</span>
+                    <div>
+                        <h1 className="sp-tribunal-title">Academic Inquiry Tribunal</h1>
+                        <span className="sp-tribunal-sub">Concept Scrutiny & Peer Resolution</span>
+                    </div>
+                </div>
+
+                <div className="sp-tribunal-bar-right">
+                    <div className="sp-tribunal-metric-badge">
+                        <MessageSquare size={13} />
+                        <span>{doubts.length} Inquiries Filed</span>
+                    </div>
+                </div>
             </header>
 
-            <div className="df-body">
+            {/* ================================================================
+                DUAL-WING TRIBUNAL WORKSPACE
+                ================================================================ */}
+            <div className="sp-tribunal-workspace">
+                {/* ============================================================
+                    LEFT WING: LODGING STUDIO & CANONS (~380px STICKY)
+                    ============================================================ */}
+                <aside className="sp-tribunal-left-wing">
+                    {/* Inquiry Submission Box */}
+                    <div className="sp-inquiry-box">
+                        <div className="sp-inquiry-header">
+                            <span className="sp-inquiry-eyebrow">ARTICLE IX · PETITION</span>
+                            <h3 className="sp-inquiry-title">Lodge Scholarly Inquiry</h3>
+                            <p className="sp-inquiry-sub">
+                                Submit specific doubts, derivations, or problem sets for peer dissection.
+                            </p>
+                        </div>
 
-                <form className="df-post-card" onSubmit={handlePostDoubt}>
-                    <label className="df-field-label" htmlFor="doubt-text">Post a doubt</label>
-                    <textarea
-                        id="doubt-text"
-                        className="df-textarea"
-                        placeholder="Type your question..."
-                        value={draftText}
-                        onChange={(e) => setDraftText(e.target.value)}
-                        rows={3}
-                    />
-                    <div className="df-post-actions">
-                        <label className="df-upload-btn">
-                            📎 {draftImage ? draftImage.name : 'Attach image'}
-                            <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => setDraftImage(e.target.files[0] || null)}
-                                hidden
+                        {postError && (
+                            <div className="sp-notice sp-notice-alert sp-inquiry-notice" role="alert">
+                                {postError}
+                            </div>
+                        )}
+
+                        <form className="sp-inquiry-form" onSubmit={handlePostDoubt}>
+                            <textarea
+                                id="doubt-text"
+                                className="sp-inquiry-textarea"
+                                placeholder="Describe the conceptual impasse, state the question source (PYQ/mock), and detail your attempt..."
+                                value={draftText}
+                                onChange={(e) => setDraftText(e.target.value)}
+                                rows={4}
+                                maxLength={5000}
+                                disabled={posting}
                             />
-                        </label>
-                        <button type="submit" className="df-btn df-btn-primary">Post doubt</button>
-                    </div>
-                </form>
 
-                <div className="df-thread-list">
-                    {doubts.map((doubt) => (
-                        <article key={doubt.id} className="df-thread">
-                            <div className="df-thread-header">
-                                <span className="df-avatar">{doubt.author.charAt(0)}</span>
-                                <div className="df-thread-meta">
-                                    <span className="df-author">{doubt.author}</span>
-                                    <span className="df-timestamp">{doubt.createdAt}</span>
-                                </div>
+                            {/* Image Attachment Dropzone */}
+                            <div className="sp-attachment-area">
+                                <label className={`sp-attach-trigger ${posting ? 'disabled' : ''}`}>
+                                    <Paperclip size={14} />
+                                    <span>
+                                        {draftImages.length
+                                            ? `${draftImages.length} of ${MAX_IMAGE_COUNT} Diagram(s) Attached`
+                                            : 'Attach Problem Sheet / Diagram (Max 3)'}
+                                    </span>
+                                    <input
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp,image/gif"
+                                        multiple
+                                        onChange={handleImageChange}
+                                        disabled={posting}
+                                        hidden
+                                    />
+                                </label>
+
+                                {draftImages.length > 0 && (
+                                    <div className="sp-attached-chips">
+                                        {draftImages.map((file) => (
+                                            <span
+                                                key={`${file.name}-${file.lastModified}`}
+                                                className="sp-attached-chip"
+                                            >
+                                                <ImageIcon size={11} />
+                                                <span className="sp-chip-name">{file.name}</span>
+                                                <button
+                                                    type="button"
+                                                    className="sp-chip-remove"
+                                                    aria-label={`Remove ${file.name}`}
+                                                    onClick={() =>
+                                                        setDraftImages((current) =>
+                                                            current.filter((item) => item !== file)
+                                                        )
+                                                    }
+                                                    disabled={posting}
+                                                >
+                                                    <X size={11} />
+                                                </button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
-                            <p className="df-thread-text">{doubt.text}</p>
-
-                            {doubt.hasImage && (
-                                <div className="df-image-placeholder">
-                                    🖼 Attached image
-                                </div>
-                            )}
-
-                            <div className="df-thread-footer">
-                                <button
-                                    className="df-reply-toggle"
-                                    onClick={() => setOpenReplyId(openReplyId === doubt.id ? null : doubt.id)}
-                                >
-                                    {doubt.replies.length} {doubt.replies.length === 1 ? 'reply' : 'replies'}
-                                </button>
-                            </div>
-
-                            {doubt.replies.length > 0 && (
-                                <div className="df-replies">
-                                    {doubt.replies.map((reply) => (
-                                        <div key={reply.id} className="df-reply">
-                                            <span className="df-avatar df-avatar-sm">{reply.author.charAt(0)}</span>
-                                            <div className="df-reply-body">
-                                                <span className="df-reply-meta">
-                                                    <span className="df-author">{reply.author}</span>
-                                                    <span className="df-timestamp">{reply.createdAt}</span>
-                                                </span>
-                                                <p className="df-reply-text">{reply.text}</p>
-                                            </div>
-                                        </div>
+                            {/* Quick Topic Helpers */}
+                            <div className="sp-quick-topics">
+                                <span className="sp-quick-label">Subject tags:</span>
+                                <div className="sp-quick-tag-row">
+                                    {QUICK_QUERY_TOPICS.map((topic) => (
+                                        <button
+                                            type="button"
+                                            key={topic}
+                                            className="sp-quick-tag"
+                                            onClick={() => setDraftText((prev) => prev ? `${prev} [${topic}] ` : `[${topic}] `)}
+                                        >
+                                            + {topic}
+                                        </button>
                                     ))}
                                 </div>
-                            )}
+                            </div>
 
-                            {openReplyId === doubt.id && (
-                                <div className="df-reply-form">
-                                    <input
-                                        type="text"
-                                        className="df-reply-input"
-                                        placeholder="Write a reply..."
-                                        value={replyDrafts[doubt.id] || ''}
-                                        onChange={(e) =>
-                                            setReplyDrafts((prev) => ({ ...prev, [doubt.id]: e.target.value }))
-                                        }
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') handleReplySubmit(doubt.id);
-                                        }}
-                                    />
-                                    <button
-                                        className="df-btn df-btn-outline"
-                                        onClick={() => handleReplySubmit(doubt.id)}
-                                    >
-                                        Reply
-                                    </button>
+                            <button
+                                type="submit"
+                                className="sp-btn sp-btn-primary sp-submit-inquiry-btn"
+                                disabled={posting || !draftText.trim()}
+                            >
+                                <Send size={14} />
+                                <span>{uploading ? 'Uploading Diagrams...' : posting ? 'Lodging Query...' : 'Lodge Inquiry to Chamber'}</span>
+                            </button>
+                        </form>
+                    </div>
+
+                    {/* Canons & Guidelines Box */}
+                    <div className="sp-canons-box">
+                        <div className="sp-canons-header">
+                            <Shield size={16} className="sp-canons-icon" />
+                            <h4 className="sp-canons-title">Tribunal Disputation Code</h4>
+                        </div>
+                        <ul className="sp-canons-list">
+                            <li>
+                                <strong>Canon I:</strong> State the exact proposition or source paper.
+                            </li>
+                            <li>
+                                <strong>Canon II:</strong> Reveal your prior attempt to isolate the misunderstanding.
+                            </li>
+                            <li>
+                                <strong>Canon III:</strong> Confirm solutions that withstand examination logic.
+                            </li>
+                        </ul>
+                    </div>
+                </aside>
+
+                {/* ============================================================
+                    RIGHT WING: THE INQUIRY DOCKET & RESOLUTION STREAM (FLUID)
+                    ============================================================ */}
+                <main className="sp-tribunal-docket">
+                    {/* Docket Header & Filter Bar */}
+                    <div className="sp-docket-toolbar">
+                        <div className="sp-docket-tabs">
+                            <button
+                                type="button"
+                                className={`sp-docket-tab ${activeFilter === 'all' ? 'active' : ''}`}
+                                onClick={() => setActiveFilter('all')}
+                            >
+                                All Inquiries ({doubts.length})
+                            </button>
+                            <button
+                                type="button"
+                                className={`sp-docket-tab ${activeFilter === 'unanswered' ? 'active' : ''}`}
+                                onClick={() => setActiveFilter('unanswered')}
+                            >
+                                Awaiting Solution ({doubts.filter(d => d.replies.length === 0).length})
+                            </button>
+                            <button
+                                type="button"
+                                className={`sp-docket-tab ${activeFilter === 'with_images' ? 'active' : ''}`}
+                                onClick={() => setActiveFilter('with_images')}
+                            >
+                                With Diagrams ({doubts.filter(d => d.images?.length > 0).length})
+                            </button>
+                        </div>
+                    </div>
+
+                    {loading && (
+                        <div className="sp-docket-loading">
+                            <div className="sp-spinner"></div>
+                            <span>Retrieving chamber dispute records...</span>
+                        </div>
+                    )}
+
+                    {loadError && (
+                        <div className="sp-notice sp-notice-alert" role="alert">
+                            {loadError}
+                        </div>
+                    )}
+
+                    {realtimeError && (
+                        <div className="sp-notice sp-notice-info" role="status">
+                            {realtimeError}
+                        </div>
+                    )}
+
+                    {!loading && !loadError && (
+                        <div className="sp-docket-feed">
+                            {filteredDoubts.map((doubt, idx) => {
+                                const hasReplies = doubt.replies.length > 0;
+                                const isReplying = openReplyId === doubt.id;
+
+                                return (
+                                    <article key={doubt.id} className="sp-query-dossier">
+                                        {/* Query Dossier Header */}
+                                        <div className="sp-query-header">
+                                            <div className="sp-query-author-block">
+                                                <div className="sp-query-avatar">
+                                                    {doubt.author.charAt(0).toUpperCase()}
+                                                </div>
+                                                <div className="sp-query-author-meta">
+                                                    <span className="sp-query-author-name">{doubt.author}</span>
+                                                    <span className="sp-query-time">
+                                                        <Clock size={11} /> {doubt.createdAt}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div className="sp-query-status-badge">
+                                                <span className="sp-query-serial">CASE #{String(idx + 1).padStart(2, '0')}</span>
+                                                <span className={`sp-status-tag ${hasReplies ? 'resolved' : 'pending'}`}>
+                                                    {hasReplies ? 'UNDER DISCUSSION' : 'OPEN FOR SCRUTINY'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Query Main Body */}
+                                        <p className="sp-query-text">{doubt.text}</p>
+
+                                        {/* Attached Diagrams Gallery */}
+                                        {doubt.images?.length > 0 && (
+                                            <div className="sp-query-gallery">
+                                                {doubt.images.map((image, imgIdx) => (
+                                                    <div
+                                                        key={image.id || imgIdx}
+                                                        className="sp-gallery-thumb-wrap"
+                                                        onClick={() => setActiveLightboxImg(image.url)}
+                                                        title="Click to examine full diagram"
+                                                    >
+                                                        <img
+                                                            src={image.url}
+                                                            alt="Attached problem diagram"
+                                                            className="sp-gallery-thumb"
+                                                        />
+                                                        <span className="sp-gallery-zoom-hint">Inspect ↗</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* Query Footer & Reply Toggle */}
+                                        <div className="sp-query-footer">
+                                            <button
+                                                type="button"
+                                                className="sp-replies-counter-btn"
+                                                onClick={() => setOpenReplyId(isReplying ? null : doubt.id)}
+                                            >
+                                                <MessageSquare size={14} />
+                                                <span>
+                                                    {doubt.replies.length} {doubt.replies.length === 1 ? 'Scholar Response' : 'Scholar Responses'}
+                                                </span>
+                                                <span className="sp-counter-action">
+                                                    {isReplying ? 'Collapse ↑' : 'Contribute Resolution ↓'}
+                                                </span>
+                                            </button>
+                                        </div>
+
+                                        {/* Discussion / Responses Feed */}
+                                        {doubt.replies.length > 0 && (
+                                            <div className="sp-responses-feed">
+                                                {doubt.replies.map((reply, rIdx) => (
+                                                    <div key={reply.id || rIdx} className="sp-response-card">
+                                                        <div className="sp-response-avatar">
+                                                            {reply.author.charAt(0).toUpperCase()}
+                                                        </div>
+                                                        <div className="sp-response-content">
+                                                            <div className="sp-response-meta">
+                                                                <span className="sp-response-author">{reply.author}</span>
+                                                                <span className="sp-response-time">{reply.createdAt}</span>
+                                                            </div>
+                                                            <p className="sp-response-text">{reply.text}</p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* Inline Resolution Composer */}
+                                        {isReplying && (
+                                            <div className="sp-inline-reply-tray">
+                                                <input
+                                                    type="text"
+                                                    className="sp-inline-reply-input"
+                                                    placeholder="Formulate constructive derivation or solution..."
+                                                    value={replyDrafts[doubt.id] || ''}
+                                                    onChange={(e) =>
+                                                        setReplyDrafts((prev) => ({ ...prev, [doubt.id]: e.target.value }))
+                                                    }
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') void handleReplySubmit(doubt.id);
+                                                    }}
+                                                    disabled={replyingId === doubt.id}
+                                                    autoFocus
+                                                />
+                                                <button
+                                                    type="button"
+                                                    className="sp-btn sp-btn-primary sp-btn-sm"
+                                                    onClick={() => void handleReplySubmit(doubt.id)}
+                                                    disabled={replyingId === doubt.id || !(replyDrafts[doubt.id] || '').trim()}
+                                                >
+                                                    {replyingId === doubt.id ? 'Submitting...' : 'Post Solution'}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </article>
+                                );
+                            })}
+
+                            {filteredDoubts.length === 0 && (
+                                <div className="sp-docket-empty">
+                                    <div className="sp-empty-case-monogram">§</div>
+                                    <h3 className="sp-empty-case-title">The Tribunal Docket is Clear</h3>
+                                    <p className="sp-empty-case-sub">
+                                        No academic impasses registered for this chamber filter. Lodge the first question in the studio on the left.
+                                    </p>
                                 </div>
                             )}
-                        </article>
-                    ))}
-                </div>
-
+                        </div>
+                    )}
+                </main>
             </div>
+
+            {/* Lightbox Modal */}
+            {activeLightboxImg && (
+                <div className="sp-lightbox-overlay" onClick={() => setActiveLightboxImg(null)}>
+                    <div className="sp-lightbox-container" onClick={(e) => e.stopPropagation()}>
+                        <button
+                            type="button"
+                            className="sp-lightbox-close"
+                            onClick={() => setActiveLightboxImg(null)}
+                            aria-label="Close diagram"
+                        >
+                            <X size={20} />
+                        </button>
+                        <img src={activeLightboxImg} alt="Magnified diagram" className="sp-lightbox-img" />
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

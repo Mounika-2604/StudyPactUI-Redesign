@@ -1,7 +1,9 @@
 import { Router } from "express";
 import {
-  getDailyGoal,
+  getDailyGoals,
+  getDailyGoalLeaderboard,
   getDailyGoalStreak,
+  postResetDailyGoalStreak,
   patchDailyGoal,
   postCompleteDailyGoal,
   postDailyGoal,
@@ -10,18 +12,12 @@ import { requireAuth } from "../middleware/auth.middleware";
 
 const router = Router();
 
-router.post("/rooms/:roomId/daily-goal", requireAuth, postDailyGoal);
-router.patch("/rooms/:roomId/daily-goal", requireAuth, patchDailyGoal);
-router.get("/rooms/:roomId/daily-goal", requireAuth, getDailyGoal);
-router.post(
-  "/rooms/:roomId/daily-goal/complete",
-  requireAuth,
-  postCompleteDailyGoal
-);
-router.get(
-  "/rooms/:roomId/streak",
-  requireAuth,
-  getDailyGoalStreak
-);
+router.get("/daily-goals/today", requireAuth, getDailyGoals);
+router.post("/daily-goals", requireAuth, postDailyGoal);
+router.patch("/daily-goals/:goalId", requireAuth, patchDailyGoal);
+router.post("/daily-goals/:goalId/complete", requireAuth, postCompleteDailyGoal);
+router.get("/daily-goals/streak", requireAuth, getDailyGoalStreak);
+router.post("/daily-goals/streak/reset", requireAuth, postResetDailyGoalStreak);
+router.get("/daily-goals/leaderboard", requireAuth, getDailyGoalLeaderboard);
 
 export default router;

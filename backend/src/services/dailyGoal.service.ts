@@ -1,20 +1,19 @@
-import { supabaseAdmin } from "../config/supabase";
+﻿import { supabaseAdmin } from "../config/supabase";
 import { CommitmentPlan, DailyGoal } from "../types/accountability.types";
 import {
-  CreateDailyGoalInput,
+  AuthenticatedDailyGoalRequest,
   DailyGoalRow,
+  DailyGoalRequirementError,
   DailyGoalServiceError,
-  UpdateDailyGoalInput,
 } from "../types/dailyGoal.types";
 
 const DAILY_GOAL_COLUMNS =
-  "id, room_id, user_id, description, goal_date, is_completed, created_at, updated_at";
+  "id, user_id, description, goal_date, is_completed, created_at, updated_at";
 
 const toDailyGoal = (row: DailyGoalRow): DailyGoal =>
   new DailyGoal(
     row.id,
     row.user_id,
-    row.room_id,
     row.description,
     row.goal_date,
     row.is_completed
@@ -22,190 +21,176 @@ const toDailyGoal = (row: DailyGoalRow): DailyGoal =>
 
 const getToday = (): string => new Date().toISOString().slice(0, 10);
 
+const inMemoryStreakResets = new Map<string, string>();
+
+export const getDailyGoalStreakResetDate = async (
+  userId: string
+): Promise<string | null> => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("daily_goal_streak_resets")
+      .select("reset_date")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!error && data?.reset_date) {
+      return data.reset_date;
+    }
+  } catch {
+    // Table may not exist in schema cache
+  }
+  return inMemoryStreakResets.get(userId) ?? null;
+};
+
+const getDailyGoalStreakResetDates = async (
+  userIds: string[]
+): Promise<Map<string, string>> => {
+  const resetDates = new Map<string, string>();
+  if (!userIds.length) return resetDates;
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("daily_goal_streak_resets")
+      .select("user_id, reset_date")
+      .in("user_id", userIds);
+    if (!error && data) {
+      for (const row of data) {
+        resetDates.set(row.user_id, row.reset_date);
+      }
+    }
+  } catch {
+    // Table may not exist in schema cache
+  }
+  for (const userId of userIds) {
+    if (!resetDates.has(userId) && inMemoryStreakResets.has(userId)) {
+      resetDates.set(userId, inMemoryStreakResets.get(userId)!);
+    }
+  }
+  return resetDates;
+};
+
+export const resetDailyGoalStreak = async (
+  userId: string
+): Promise<string> => {
+  const resetDate = getToday();
+  inMemoryStreakResets.set(userId, resetDate);
+  try {
+    await supabaseAdmin
+      .from("daily_goal_streak_resets")
+      .upsert(
+        { user_id: userId, reset_date: resetDate },
+        { onConflict: "user_id" }
+      );
+  } catch {
+    // Fall back to in-memory reset
+  }
+  return resetDate;
+};
+
+export const hasDailyGoalForToday = async (userId: string): Promise<boolean> => {
+  const { data, error } = await supabaseAdmin
+    .from("daily_goals")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("goal_date", getToday())
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
+};
+
+export const requireDailyGoalForToday = async (
+  userId: string,
+  message: string
+): Promise<void> => {
+  if (!(await hasDailyGoalForToday(userId))) {
+    throw new DailyGoalRequirementError(message);
+  }
+};
+
 const validateDescription = (description: string): string => {
   const trimmedDescription = description.trim();
-
-  if (trimmedDescription.length === 0) {
-    throw new DailyGoalServiceError(
-      400,
-      "Daily goal description must not be empty"
-    );
+  if (!trimmedDescription) {
+    throw new DailyGoalServiceError(400, "Daily goal description must not be empty");
   }
-
   return trimmedDescription;
 };
 
-const requireRoomMembership = async (
-  roomId: string,
-  userId: string
-): Promise<void> => {
+const requireUser = (req: AuthenticatedDailyGoalRequest): string => {
+  if (!req.user?.id) {
+    throw new DailyGoalServiceError(401, "Authentication is required for daily goals");
+  }
+  return req.user.id;
+};
+
+const getGoalsForDate = async (userId: string, goalDate: string) => {
   const { data, error } = await supabaseAdmin
-    .from("room_members")
-    .select("room_id")
-    .eq("room_id", roomId)
+    .from("daily_goals")
+    .select(DAILY_GOAL_COLUMNS)
     .eq("user_id", userId)
-    .maybeSingle();
+    .eq("goal_date", goalDate)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as DailyGoalRow[];
+};
 
-  if (error) {
-    throw error;
-  }
-
-  if (!data) {
-    throw new DailyGoalServiceError(
-      403,
-      "Room membership is required to manage a daily goal"
-    );
-  }
+export const getTodayDailyGoals = async (req: AuthenticatedDailyGoalRequest) => {
+  const userId = requireUser(req);
+  return (await getGoalsForDate(userId, getToday())).map(toDailyGoal);
 };
 
 export const createTodayDailyGoal = async (
-  input: CreateDailyGoalInput
-): Promise<DailyGoal> => {
-  const description = validateDescription(input.description);
-  await requireRoomMembership(input.roomId, input.userId);
-
+  req: AuthenticatedDailyGoalRequest,
+  description: string
+) => {
+  const userId = requireUser(req);
+  const normalizedDescription = validateDescription(description);
   const { data, error } = await supabaseAdmin
     .from("daily_goals")
     .insert({
-      room_id: input.roomId,
-      user_id: input.userId,
-      description,
+      user_id: userId,
+      description: normalizedDescription,
       goal_date: getToday(),
     })
     .select(DAILY_GOAL_COLUMNS)
     .single();
-
-  if (error) {
-    if (error.code === "23505") {
-      throw new DailyGoalServiceError(
-        409,
-        "A daily goal already exists for today"
-      );
-    }
-
-    throw error;
-  }
-
+  if (error || !data) throw error ?? new Error("Unable to create the daily goal.");
   return toDailyGoal(data as DailyGoalRow);
 };
 
-export const updateTodayDailyGoal = async (
-  roomId: string,
-  userId: string,
-  input: UpdateDailyGoalInput
-): Promise<DailyGoal> => {
-  const description = validateDescription(input.description);
-  await requireRoomMembership(roomId, userId);
-
+export const updateDailyGoal = async (
+  req: AuthenticatedDailyGoalRequest,
+  goalId: string,
+  description: string
+) => {
+  const userId = requireUser(req);
+  const normalizedDescription = validateDescription(description);
   const { data, error } = await supabaseAdmin
     .from("daily_goals")
-    .update({
-      description,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("room_id", roomId)
+    .update({ description: normalizedDescription, updated_at: new Date().toISOString() })
+    .eq("id", goalId)
     .eq("user_id", userId)
     .eq("goal_date", getToday())
     .select(DAILY_GOAL_COLUMNS)
     .maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  if (!data) {
-    throw new DailyGoalServiceError(
-      404,
-      "No daily goal exists for today"
-    );
-  }
-
+  if (error) throw error;
+  if (!data) throw new DailyGoalServiceError(404, "Daily goal not found");
   return toDailyGoal(data as DailyGoalRow);
 };
 
-export const getTodayDailyGoal = async (
-  roomId: string,
-  userId: string
-): Promise<DailyGoal> => {
-  await requireRoomMembership(roomId, userId);
-
+export const completeDailyGoal = async (
+  req: AuthenticatedDailyGoalRequest,
+  goalId: string
+) => {
+  const userId = requireUser(req);
   const { data, error } = await supabaseAdmin
     .from("daily_goals")
-    .select(DAILY_GOAL_COLUMNS)
-    .eq("room_id", roomId)
-    .eq("user_id", userId)
-    .eq("goal_date", getToday())
-    .maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  if (!data) {
-    throw new DailyGoalServiceError(
-      404,
-      "No daily goal exists for today"
-    );
-  }
-
-  return toDailyGoal(data as DailyGoalRow);
-};
-
-export const completeTodayDailyGoal = async (
-  roomId: string,
-  userId: string
-): Promise<DailyGoal> => {
-  await requireRoomMembership(roomId, userId);
-
-  const { data: existingGoal, error: lookupError } = await supabaseAdmin
-    .from("daily_goals")
-    .select(DAILY_GOAL_COLUMNS)
-    .eq("room_id", roomId)
-    .eq("user_id", userId)
-    .eq("goal_date", getToday())
-    .maybeSingle();
-
-  if (lookupError) {
-    throw lookupError;
-  }
-
-  if (!existingGoal) {
-    throw new DailyGoalServiceError(
-      404,
-      "No daily goal exists for today"
-    );
-  }
-
-  const goal = existingGoal as DailyGoalRow;
-
-  if (goal.is_completed) {
-    return toDailyGoal(goal);
-  }
-
-  const { data, error } = await supabaseAdmin
-    .from("daily_goals")
-    .update({
-      is_completed: true,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", goal.id)
-    .eq("room_id", roomId)
+    .update({ is_completed: true, updated_at: new Date().toISOString() })
+    .eq("id", goalId)
     .eq("user_id", userId)
     .eq("goal_date", getToday())
     .select(DAILY_GOAL_COLUMNS)
     .maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  if (!data) {
-    throw new DailyGoalServiceError(
-      404,
-      "No daily goal exists for today"
-    );
-  }
-
+  if (error) throw error;
+  if (!data) throw new DailyGoalServiceError(404, "Daily goal not found");
   return toDailyGoal(data as DailyGoalRow);
 };
 
@@ -215,113 +200,220 @@ const getPreviousDate = (date: string): string => {
   return previousDate.toISOString().slice(0, 10);
 };
 
-const groupGoalsByDate = (
-  rows: DailyGoalRow[]
-): Map<string, DailyGoal[]> => {
-  const goalsByDate = new Map<string, DailyGoal[]>();
+const isCompletedDay = (userId: string, goals: DailyGoalRow[]): boolean => {
+  if (!goals.length) return false;
+  const domainGoals = goals.map(toDailyGoal);
+  const commitmentPlan = new CommitmentPlan(userId, domainGoals);
+  return commitmentPlan.getProgress() === 1;
+};
 
+const calculateCurrentStreak = (
+  userId: string,
+  rows: DailyGoalRow[],
+  resetDate: string | null = null
+): number => {
+  const goalsByDate = new Map<string, DailyGoalRow[]>();
   for (const row of rows) {
     const goals = goalsByDate.get(row.goal_date) ?? [];
-    goals.push(toDailyGoal(row));
+    goals.push(row);
     goalsByDate.set(row.goal_date, goals);
   }
 
-  return goalsByDate;
-};
-
-const isCompletedDay = (
-  userId: string,
-  roomId: string,
-  goals: DailyGoal[] | undefined
-): boolean => {
-  if (!goals || goals.length === 0) {
-    return false;
-  }
-
-  const commitmentPlan = new CommitmentPlan(
-    userId,
-    goals
-  );
-
-  return commitmentPlan.getProgress() === 1 &&
-    goals.every((goal) => goal.roomId === roomId);
-};
-
-export const getCurrentStreak = async (
-  roomId: string,
-  userId: string
-): Promise<number> => {
-  await requireRoomMembership(roomId, userId);
-
   const today = getToday();
-  const { data, error } = await supabaseAdmin
-    .from("daily_goals")
-    .select(DAILY_GOAL_COLUMNS)
-    .eq("room_id", roomId)
-    .eq("user_id", userId)
-    .lte("goal_date", today)
-    .order("goal_date", { ascending: false });
+  const yesterday = getPreviousDate(today);
 
-  if (error) {
-    throw error;
+  if (resetDate && today <= resetDate) {
+    return 0;
   }
 
-  const goalsByDate = groupGoalsByDate((data ?? []) as DailyGoalRow[]);
-  let currentDate = today;
-  let streak = 0;
+  let currentDate: string | null = null;
+  if (isCompletedDay(userId, goalsByDate.get(today) ?? [])) {
+    currentDate = today;
+  } else if ((!resetDate || yesterday > resetDate) && isCompletedDay(userId, goalsByDate.get(yesterday) ?? [])) {
+    currentDate = yesterday;
+  }
 
-  while (isCompletedDay(userId, roomId, goalsByDate.get(currentDate))) {
+  if (!currentDate) {
+    return 0;
+  }
+
+  let streak = 0;
+  while (
+    currentDate &&
+    (!resetDate || currentDate > resetDate) &&
+    isCompletedDay(userId, goalsByDate.get(currentDate) ?? [])
+  ) {
     streak += 1;
     currentDate = getPreviousDate(currentDate);
   }
-
   return streak;
 };
 
-export const getRoomCurrentStreaks = async (
+export const getDailyGoalStreak = async (req: AuthenticatedDailyGoalRequest) => {
+  const userId = requireUser(req);
+  const resetDate = await getDailyGoalStreakResetDate(userId);
+  let goalsQuery = supabaseAdmin
+    .from("daily_goals")
+    .select(DAILY_GOAL_COLUMNS)
+    .eq("user_id", userId)
+    .order("goal_date", { ascending: false });
+  goalsQuery = resetDate
+    ? goalsQuery.gt("goal_date", resetDate)
+    : goalsQuery.lte("goal_date", getToday());
+  const { data, error } = await goalsQuery;
+  if (error) throw error;
+  return {
+    streak: calculateCurrentStreak(userId, (data ?? []) as DailyGoalRow[], resetDate),
+    resetDate,
+  };
+};
+
+export interface DailyGoalLeaderboardEntry {
+  userId: string;
+  name: string;
+  streak: number;
+  rank: number;
+}
+
+export interface RoomMemberDailyGoals {
+  userId: string;
+  name: string;
+  goals: Array<{
+    id: string;
+    description: string;
+    isCompleted: boolean;
+  }>;
+}
+
+export const getRoomMemberDailyGoals = async (
   roomId: string,
-  userIds: string[]
-): Promise<Map<string, number>> => {
-  const streaks = new Map(userIds.map((userId) => [userId, 0]));
-  if (userIds.length === 0) {
-    return streaks;
+  requesterId: string
+): Promise<RoomMemberDailyGoals[]> => {
+  const { data: requesterMembership, error: membershipError } = await supabaseAdmin
+    .from("room_members")
+    .select("room_id")
+    .eq("room_id", roomId)
+    .eq("user_id", requesterId)
+    .maybeSingle();
+  if (membershipError) throw membershipError;
+  if (!requesterMembership) {
+    throw new DailyGoalServiceError(403, "Join this room before viewing daily goals.");
   }
 
-  const today = getToday();
+  const { data: members, error: membersError } = await supabaseAdmin
+    .from("room_members")
+    .select("user_id, joined_at")
+    .eq("room_id", roomId)
+    .order("joined_at", { ascending: true });
+  if (membersError) throw membersError;
+
+  const userIds = (members ?? []).map((member) => member.user_id);
+  if (!userIds.length) return [];
+
+  const [{ data: profiles, error: profilesError }, { data: goals, error: goalsError }] =
+    await Promise.all([
+      supabaseAdmin.from("profiles").select("id, full_name").in("id", userIds),
+      supabaseAdmin
+        .from("daily_goals")
+        .select("id, user_id, description, is_completed")
+        .in("user_id", userIds)
+        .eq("goal_date", getToday())
+        .order("created_at", { ascending: true }),
+    ]);
+  if (profilesError) throw profilesError;
+  if (goalsError) throw goalsError;
+
+  const namesByUserId = new Map(
+    (profiles ?? []).map((profile) => [profile.id, profile.full_name || "StudyPact member"])
+  );
+  const goalsByUserId = new Map<string, RoomMemberDailyGoals["goals"]>();
+  for (const goal of goals ?? []) {
+    const memberGoals = goalsByUserId.get(goal.user_id) ?? [];
+    memberGoals.push({
+      id: goal.id,
+      description: goal.description,
+      isCompleted: goal.is_completed,
+    });
+    goalsByUserId.set(goal.user_id, memberGoals);
+  }
+
+  return userIds.map((userId) => ({
+    userId,
+    name: namesByUserId.get(userId) || "StudyPact member",
+    goals: goalsByUserId.get(userId) ?? [],
+  }));
+};
+
+export const getDailyGoalLeaderboard = async (): Promise<DailyGoalLeaderboardEntry[]> => {
   const { data, error } = await supabaseAdmin
     .from("daily_goals")
     .select(DAILY_GOAL_COLUMNS)
-    .eq("room_id", roomId)
-    .in("user_id", userIds)
-    .lte("goal_date", today)
+    .lte("goal_date", getToday())
     .order("goal_date", { ascending: false });
+  if (error) throw error;
 
-  if (error) {
-    throw error;
-  }
-
-  const goalsByUserAndDate = new Map<string, Map<string, DailyGoal[]>>();
+  const goalsByUser = new Map<string, DailyGoalRow[]>();
   for (const row of (data ?? []) as DailyGoalRow[]) {
-    const goalsByDate =
-      goalsByUserAndDate.get(row.user_id) ?? new Map<string, DailyGoal[]>();
-    const goals = goalsByDate.get(row.goal_date) ?? [];
-    goals.push(toDailyGoal(row));
-    goalsByDate.set(row.goal_date, goals);
-    goalsByUserAndDate.set(row.user_id, goalsByDate);
+    const goals = goalsByUser.get(row.user_id) ?? [];
+    goals.push(row);
+    goalsByUser.set(row.user_id, goals);
   }
 
+  const userIds = [...goalsByUser.keys()];
+  const resetDates = await getDailyGoalStreakResetDates(userIds);
+  const { data: profiles, error: profileError } = userIds.length
+    ? await supabaseAdmin.from("profiles").select("id, full_name").in("id", userIds)
+    : { data: [], error: null };
+  if (profileError) throw profileError;
+
+  const namesByUserId = new Map(
+    (profiles ?? []).map((profile) => [profile.id, profile.full_name || "StudyPact member"])
+  );
+
+  return userIds
+    .map((userId) => ({
+      userId,
+      name: namesByUserId.get(userId) || "StudyPact member",
+      streak: calculateCurrentStreak(
+        userId,
+        goalsByUser.get(userId) ?? [],
+        resetDates.get(userId) ?? null
+      ),
+      rank: 0,
+    }))
+    .sort(
+      (left, right) =>
+        right.streak - left.streak ||
+        left.name.localeCompare(right.name) ||
+        left.userId.localeCompare(right.userId)
+    )
+    .map((entry, index) => ({ ...entry, rank: index + 1 }));
+};
+
+// Kept for the existing room leaderboard service until room goal display is migrated.
+export const getRoomCurrentStreaks = async (
+  _roomId: string,
+  userIds: string[]
+): Promise<Map<string, number>> => {
+  const streaks = new Map(userIds.map((userId) => [userId, 0]));
+  const resetDates = await getDailyGoalStreakResetDates(userIds);
   for (const userId of userIds) {
-    const goalsByDate = goalsByUserAndDate.get(userId);
-    let currentDate = today;
-    let streak = 0;
+    const { data, error } = await supabaseAdmin
+      .from("daily_goals")
+      .select(DAILY_GOAL_COLUMNS)
+      .eq("user_id", userId)
+      .gt("goal_date", resetDates.get(userId) ?? "1900-01-01")
+      .order("goal_date", { ascending: false });
+    if (error) throw error;
 
-    while (isCompletedDay(userId, roomId, goalsByDate?.get(currentDate))) {
-      streak += 1;
-      currentDate = getPreviousDate(currentDate);
-    }
-
-    streaks.set(userId, streak);
+    streaks.set(
+      userId,
+      calculateCurrentStreak(
+        userId,
+        (data ?? []) as DailyGoalRow[],
+        resetDates.get(userId) ?? null
+      )
+    );
   }
-
   return streaks;
 };

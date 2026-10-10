@@ -6,6 +6,7 @@ import {
   getRoomById,
   isRoomMember,
   leaveRoom as leaveRoomService,
+  MockExamLifecycleActiveError,
   listRoomLeaderboard,
   listRoomMembers,
   joinRoom as joinRoomService,
@@ -13,6 +14,11 @@ import {
 } from "../services/room.service";
 import { CreateRoomInput, JoinRoomResult, Room } from "../types/room.types";
 import { TaskRequirementError } from "../types/userTask.types";
+import { getRoomMemberDailyGoals } from "../services/dailyGoal.service";
+import {
+  DailyGoalRequirementError,
+  DailyGoalServiceError,
+} from "../types/dailyGoal.types";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -33,6 +39,17 @@ const handleTaskRequirementError = (
     message: error.message,
   });
   return true;
+};
+
+const handleRoomEligibilityError = (error: unknown, res: Response): boolean => {
+  if (error instanceof DailyGoalRequirementError) {
+    res.status(error.statusCode).json({
+      success: false,
+      message: error.message,
+    });
+    return true;
+  }
+  return handleTaskRequirementError(error, res);
 };
 
 export const getRooms = async (_req: Request, res: Response) => {
@@ -113,7 +130,7 @@ export const postRoom = async (req: AuthenticatedRequest, res: Response) => {
       creatorUserId,
     });
   } catch (error) {
-    if (!handleTaskRequirementError(error, res)) {
+    if (!handleRoomEligibilityError(error, res)) {
       throw error;
     }
     return;
@@ -146,7 +163,7 @@ export const joinRoom = async (
   try {
     result = await joinRoomService(id, userId);
   } catch (error) {
-    if (!handleTaskRequirementError(error, res)) {
+    if (!handleRoomEligibilityError(error, res)) {
       throw error;
     }
     return;
@@ -192,6 +209,37 @@ export const getMembers = async (
 
   const members = await listRoomMembers(roomId);
   res.status(200).json({ success: true, data: members });
+};
+
+export const getRoomDailyGoals = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  const roomId = req.params.roomId;
+  const userId = req.user?.id;
+
+  if (typeof roomId !== "string" || !UUID_PATTERN.test(roomId)) {
+    res.status(400).json({ success: false, message: "Invalid room ID" });
+    return;
+  }
+  if (!userId) {
+    res.status(401).json({ success: false, message: "Authentication required." });
+    return;
+  }
+
+  try {
+    const goals = await getRoomMemberDailyGoals(roomId, userId);
+    res.status(200).json({ success: true, data: goals });
+  } catch (error) {
+    if (error instanceof DailyGoalServiceError) {
+      res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+      });
+      return;
+    }
+    throw error;
+  }
 };
 
 export const getRoomLeaderboard = async (
@@ -240,6 +288,14 @@ export const leaveRoom = async (
     return;
   }
 
-  await leaveRoomService(roomId, userId);
+  try {
+    await leaveRoomService(roomId, userId);
+  } catch (error) {
+    if (error instanceof MockExamLifecycleActiveError) {
+      res.status(error.statusCode).json({ success: false, message: error.message });
+      return;
+    }
+    throw error;
+  }
   res.status(204).send();
 };
