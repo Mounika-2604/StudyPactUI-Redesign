@@ -1,25 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
-  BookOpen,
   Plus,
   Flame,
   CheckCircle2,
   Circle,
   LogOut,
-  Settings,
   Compass,
   Trophy,
-  ArrowRight,
-  Menu,
   X,
   RotateCcw,
-  Sparkles,
-  Users,
-  Search,
   LayoutGrid,
   List,
-  Shield,
   Clock,
   HelpCircle,
   FileCheck,
@@ -46,16 +38,16 @@ import {
 import "../common/Modal.css";
 import "./Dashboard.css";
 
-const MOCK_USER = { name: "Scholar", streakGoal: 14 };
+const MOCK_USER = { name: "Ananya", streakGoal: 14 };
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const EXAM_FILTERS = ["All", "UPSC", "JEE", "NEET", "GATE"];
 const QUICK_SUGGESTIONS = [
   "50 Practice MCQs",
-  "GS-IV Ethics Case Study",
-  "Previous Year Question Drill",
-  "Formula Sheet & Derivations",
+  "Revise Formula Sheet",
+  "Solve 10 Previous Year Questions",
+  "Chapter Summary Notes",
 ];
 
 const normalizeDailyGoal = (goal) => ({
@@ -122,8 +114,8 @@ function CreateRoomModal({ onClose, onCreate }) {
       >
         <div className="sp-modal-header">
           <div>
-            <span className="sp-charter-tag">COMMISSIONING CHARTER</span>
-            <h3 className="sp-modal-title">Establish Study Chamber</h3>
+            <span className="sp-charter-tag">NEW STUDY ROOM</span>
+            <h3 className="sp-modal-title">Create a Study Room</h3>
           </div>
           <button
             type="button"
@@ -137,7 +129,7 @@ function CreateRoomModal({ onClose, onCreate }) {
 
         <div className="sp-modal-body">
           <div className="sp-form-group">
-            <label className="sp-form-label">Chamber Designation / Name *</label>
+            <label className="sp-form-label">Room Name *</label>
             <input
               type="text"
               className="sp-input"
@@ -150,7 +142,7 @@ function CreateRoomModal({ onClose, onCreate }) {
           </div>
 
           <div className="sp-form-group">
-            <label className="sp-form-label">Examination Track</label>
+            <label className="sp-form-label">Exam / Category</label>
             <div className="sp-track-radio-group">
               {["UPSC", "GATE", "JEE", "NEET", "General"].map((track) => (
                 <button
@@ -165,10 +157,10 @@ function CreateRoomModal({ onClose, onCreate }) {
             </div>
           </div>
 
-          <div className="sp-form-group">
+          <div className="sp-form-group sp-members-group">
             <div className="sp-slider-label-row">
-              <label className="sp-form-label">Cadre Capacity</label>
-              <span className="sp-capacity-badge">{maxMembers} Scholars</span>
+              <label className="sp-form-label">Max Members</label>
+              <span className="sp-capacity-badge">{maxMembers} Members</span>
             </div>
             <input
               type="range"
@@ -179,7 +171,7 @@ function CreateRoomModal({ onClose, onCreate }) {
               className="sp-slider"
             />
             <p className="sp-form-hint">
-              Smaller cohorts (4–6 scholars) maintain 82% higher focus retention.
+              Smaller groups (4–6 members) work best for focused study sessions.
             </p>
           </div>
         </div>
@@ -193,7 +185,7 @@ function CreateRoomModal({ onClose, onCreate }) {
             Cancel
           </button>
           <button type="submit" className="sp-btn sp-btn-primary">
-            Seal & Commission Chamber
+            Create Room
           </button>
         </div>
       </form>
@@ -457,7 +449,7 @@ export default function Dashboard() {
             <span className="sp-seal-stamp">SP</span>
             <div className="sp-brand-text-block">
               <span className="sp-brand-title">StudyPact</span>
-              <span className="sp-station-mode-tag">ACADEMIC ATELIER</span>
+              <span className="sp-station-mode-tag">PEER STUDY PLATFORM</span>
             </div>
           </Link>
           <div className="sp-station-status-pill" title="National sync operational">
@@ -466,14 +458,14 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Center: Quick Chamber Key Port + Navigation Rail */}
+        {/* Center: Quick Room Code + Navigation Rail */}
         <div className="sp-station-bar-center">
           <nav className="sp-station-nav-links">
             <span className="sp-station-nav-link active">
-              <Compass size={14} /> Chambers
+              <Compass size={14} /> Study Rooms
             </span>
             <Link to="/mock-room" className="sp-station-nav-link">
-              <FileCheck size={14} /> Mock Hall
+              <FileCheck size={14} /> Mock Tests
             </Link>
             <Link to="/doubt-forum/1" className="sp-station-nav-link">
               <HelpCircle size={14} /> Doubt Forum
@@ -481,14 +473,14 @@ export default function Dashboard() {
           </nav>
 
           <form className="sp-station-keyport" onSubmit={handleJoinByCode}>
-            <span className="sp-keyport-label">DIRECT KEY:</span>
+            <span className="sp-keyport-label">ROOM CODE:</span>
             <input
               className="sp-keyport-input"
               value={roomCode}
               onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-              placeholder="6-CHAR CODE"
+              placeholder="ENTER CODE"
               maxLength={6}
-              aria-label="Direct room key"
+              aria-label="Room code"
             />
             <button
               className="sp-keyport-submit"
@@ -514,7 +506,7 @@ export default function Dashboard() {
 
           <button
             className="sp-station-signout-btn"
-            title="Sign out of atelier"
+            title="Sign out"
             onClick={async () => {
               await signOut();
               navigate("/signin");
@@ -530,15 +522,15 @@ export default function Dashboard() {
           ==================================================================== */}
       <div className="sp-war-room">
         {/* ==================================================================
-            LEFT WING: THE SCHOLAR'S DAILY INDENTURE & HONOR LEDGER (~360px)
+            LEFT WING: DAILY GOALS & LEADERBOARD (~360px)
             ================================================================== */}
         <aside className="sp-ledger-wing">
           {/* Section 1: Today's Study Covenant (Progress Dial) */}
           <div className="sp-covenant-box">
             <div className="sp-covenant-top">
               <div>
-                <span className="sp-covenant-eyebrow">ARTICLE IV · COVENANT</span>
-                <h3 className="sp-covenant-title">Today's Focus Pact</h3>
+                <span className="sp-covenant-eyebrow">DAILY ACCOUNTABILITY</span>
+                <h3 className="sp-covenant-title">Today's Goals</h3>
               </div>
               <DailyProgressRing
                 streak={streakLoading ? 0 : streak}
@@ -548,14 +540,16 @@ export default function Dashboard() {
             </div>
 
             <p className="sp-covenant-summary">
-              {dailyGoals.length > 0
-                ? `${completedGoalsCount} of ${dailyGoals.length} obligations fulfilled today.`
-                : "No commitments registered yet today. Declare your pact below."}
+              {streakError
+                ? streakError
+                : dailyGoals.length > 0
+                ? `${completedGoalsCount} of ${dailyGoals.length} goals completed today.`
+                : "No goals set for today yet. Add your daily goals below."}
             </p>
 
             <div className="sp-covenant-footer">
               <span className="sp-covenant-lock-hint">
-                <Clock size={12} /> Midnight Deadline
+                <Clock size={12} /> Resets at midnight
               </span>
               <button
                 type="button"
@@ -577,8 +571,8 @@ export default function Dashboard() {
           <div className="sp-commitments-box">
             <div className="sp-commitments-header">
               <div>
-                <h4 className="sp-commitments-title">Daily Indenture</h4>
-                <p className="sp-commitments-sub">Irrevocable daily targets</p>
+                <h4 className="sp-commitments-title">Daily Tasks</h4>
+                <p className="sp-commitments-sub">Your daily study checklist</p>
               </div>
               <span className="sp-commitments-badge">
                 {dailyGoals.length ? `${completedGoalsCount}/${dailyGoals.length}` : "0"}
@@ -590,12 +584,12 @@ export default function Dashboard() {
             )}
 
             {dailyGoalLoading ? (
-              <div className="sp-commitments-loading">Consulting daily ledger...</div>
+              <div className="sp-commitments-loading">Loading daily goals...</div>
             ) : dailyGoals.length === 0 ? (
               <div className="sp-commitments-empty">
-                <p className="sp-empty-lead">Your slate is unwritten today.</p>
+                <p className="sp-empty-lead">No goals added for today.</p>
                 <p className="sp-empty-sub">
-                  An uncommitted hour is easily surrendered. Declare your first pact.
+                  Set your daily study goals to stay focused and build your streak.
                 </p>
               </div>
             ) : (
@@ -611,7 +605,7 @@ export default function Dashboard() {
                       className="sp-clause-check-btn"
                       onClick={() => toggleDailyGoal(goal.id)}
                       disabled={goal.isCompleted}
-                      title={goal.isCompleted ? "Target fulfilled" : "Mark as fulfilled"}
+                      title={goal.isCompleted ? "Goal completed" : "Mark as completed"}
                     >
                       {goal.isCompleted ? (
                         <CheckCircle2 size={16} className="sp-checked-icon" />
@@ -665,7 +659,7 @@ export default function Dashboard() {
                   className="sp-input sp-indenture-input"
                   value={newGoalText}
                   onChange={(e) => setNewGoalText(e.target.value)}
-                  placeholder={editingGoalId ? "Amend commitment..." : "Enter specific study commitment..."}
+                  placeholder={editingGoalId ? "Update today's goal..." : "What are you studying today?..."}
                   autoFocus
                 />
                 <div className="sp-indenture-form-actions">
@@ -681,7 +675,7 @@ export default function Dashboard() {
                     Cancel
                   </button>
                   <button type="submit" className="sp-btn sp-btn-primary sp-btn-xs">
-                    {editingGoalId ? "Amend" : "Seal Pact"}
+                    {editingGoalId ? "Update" : "Add Goal"}
                   </button>
                 </div>
               </form>
@@ -691,25 +685,27 @@ export default function Dashboard() {
                 className="sp-add-indenture-btn"
                 onClick={() => setShowAddGoal(true)}
               >
-                <Plus size={14} /> Add Indenture Commitment
+                <Plus size={14} /> Add Daily Goal
               </button>
             )}
           </div>
 
-          {/* Section 3: The National Cadre (Honor Roll) */}
+          {/* Section 3: The Leaderboard (Honor Roll) */}
           <div className="sp-cadre-box">
             <div className="sp-cadre-header">
               <div>
-                <h4 className="sp-cadre-title">National Cadre</h4>
-                <p className="sp-cadre-sub">Longest uninterrupted discipline</p>
+                <h4 className="sp-cadre-title">Leaderboard</h4>
+                <p className="sp-cadre-sub">Top study streaks</p>
               </div>
               <Trophy size={16} className="sp-cadre-trophy" />
             </div>
 
             {leaderboardLoading ? (
-              <div className="sp-cadre-loading">Summoning records...</div>
+              <div className="sp-cadre-loading">Loading leaderboard...</div>
+            ) : leaderboardError ? (
+              <p className="sp-cadre-empty">{leaderboardError}</p>
             ) : leaderboard.length === 0 ? (
-              <p className="sp-cadre-empty">No active streaks recorded yet. Claim the frontier!</p>
+              <p className="sp-cadre-empty">No active streaks recorded yet. Complete today's goals to climb the board!</p>
             ) : (
               <ol className="sp-cadre-list">
                 {leaderboard.slice(0, 5).map((entry, idx) => {
@@ -748,16 +744,16 @@ export default function Dashboard() {
         </aside>
 
         {/* ==================================================================
-            RIGHT WING: CHAMBER OPERATIONS DISPATCH & REGISTRY (FLUID)
+            RIGHT WING: STUDY ROOMS DIRECTORY (FLUID)
             ================================================================== */}
         <main className="sp-dispatch-stage">
           {/* Executive Mission Briefing Strip */}
           <section className="sp-dispatch-briefing">
             <div className="sp-briefing-info">
-              <span className="sp-briefing-eyebrow">CADRE REGISTRY · REVISION HUBS</span>
-              <h1 className="sp-briefing-title">Disciplined Study Chambers</h1>
+              <span className="sp-briefing-eyebrow">PEER STUDY GROUPS</span>
+              <h1 className="sp-briefing-title">Study Rooms</h1>
               <p className="sp-briefing-sub">
-                Live peer chambers running synchronized Pomodoro intervals. Enter an ongoing room or commission a new cadre.
+                Join an active study room with synchronized Pomodoro timers, or create your own room for your study group.
               </p>
             </div>
 
@@ -768,7 +764,7 @@ export default function Dashboard() {
                   type="button"
                   className={`sp-toggle-btn ${viewMode === "dossiers" ? "active" : ""}`}
                   onClick={() => setViewMode("dossiers")}
-                  title="Dossier Card View"
+                  title="Card View"
                 >
                   <LayoutGrid size={15} />
                 </button>
@@ -776,7 +772,7 @@ export default function Dashboard() {
                   type="button"
                   className={`sp-toggle-btn ${viewMode === "board" ? "active" : ""}`}
                   onClick={() => setViewMode("board")}
-                  title="Schedule Board View"
+                  title="Table View"
                 >
                   <List size={15} />
                 </button>
@@ -787,7 +783,7 @@ export default function Dashboard() {
                 className="sp-btn sp-btn-primary sp-commission-btn"
                 onClick={() => setShowCreateModal(true)}
               >
-                <Plus size={16} /> Commission Chamber
+                <Plus size={16} /> Create Room
               </button>
             </div>
           </section>
@@ -801,12 +797,12 @@ export default function Dashboard() {
                   className={`sp-track-tab ${activeFilter === tag ? "active" : ""}`}
                   onClick={() => setActiveFilter(tag)}
                 >
-                  {tag === "All" ? "All Examination Tracks" : `${tag} Track`}
+                  {tag === "All" ? "All Rooms" : `${tag} Rooms`}
                 </button>
               ))}
             </div>
             <span className="sp-track-count">
-              {visibleRooms.length} {visibleRooms.length === 1 ? "Chamber" : "Chambers"} Online
+              {visibleRooms.length} {visibleRooms.length === 1 ? "Room" : "Rooms"} Online
             </span>
           </div>
 
@@ -821,7 +817,7 @@ export default function Dashboard() {
           {roomsLoading && (
             <div className="sp-dispatch-loading">
               <div className="sp-spinner"></div>
-              <span>Synchronizing active cohort registry...</span>
+              <span>Loading study rooms...</span>
             </div>
           )}
 
@@ -844,16 +840,16 @@ export default function Dashboard() {
                 <div className="sp-dispatch-empty">
                   <div className="sp-empty-monogram">§</div>
                   <h3 className="sp-empty-title">
-                    No active chambers found for {activeFilter}
+                    No study rooms found for {activeFilter}
                   </h3>
                   <p className="sp-empty-desc">
-                    Be the foundational anchor. Form this cohort, set the focus agenda, and invite disciplined peers.
+                    Be the first to start a study room for {activeFilter}. Set your session goals and invite your peers to join.
                   </p>
                   <button
                     className="sp-btn sp-btn-primary"
                     onClick={() => setShowCreateModal(true)}
                   >
-                    <Plus size={15} /> Commission {activeFilter} Chamber
+                    <Plus size={15} /> Create {activeFilter} Room
                   </button>
                 </div>
               )}
@@ -873,23 +869,23 @@ export default function Dashboard() {
               {visibleRooms.length === 0 ? (
                 <div className="sp-dispatch-empty">
                   <div className="sp-empty-monogram">§</div>
-                  <h3 className="sp-empty-title">No scheduled chambers for {activeFilter}</h3>
-                  <p className="sp-empty-desc">Commission a chamber to initialize this board.</p>
+                  <h3 className="sp-empty-title">No rooms found for {activeFilter}</h3>
+                  <p className="sp-empty-desc">Create a study room to start this board.</p>
                 </div>
               ) : (
                 <table className="sp-board-table">
                   <thead>
                     <tr>
                       <th style={{ width: "90px" }}>TRACK</th>
-                      <th>CHAMBER DESIGNATION</th>
-                      <th>SYLLABUS FOCUS</th>
-                      <th style={{ width: "130px" }}>CADRE KEY</th>
-                      <th style={{ width: "120px" }}>OCCUPANCY</th>
+                      <th>ROOM NAME</th>
+                      <th>TOPIC / FOCUS</th>
+                      <th style={{ width: "130px" }}>ROOM CODE</th>
+                      <th style={{ width: "120px" }}>MEMBERS</th>
                       <th style={{ width: "130px", textAlign: "right" }}>ACTION</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleRooms.map((room, idx) => {
+                    {visibleRooms.map((room) => {
                       const maxCap = room.maxMembers || 6;
                       const count = room.memberCount || Math.min(Math.max((room.id ? (room.id.charCodeAt(0) % 5) + 1 : 2), 1), maxCap);
                       const isJoining = joiningRoomId === room.id;
@@ -918,7 +914,7 @@ export default function Dashboard() {
                                 type="button"
                                 className="sp-board-key-btn"
                                 onClick={(e) => handleCopyCodeDirect(e, room.roomCode, room.id)}
-                                title="Copy room key"
+                                title="Copy room code"
                               >
                                 <code>{room.roomCode}</code>
                                 {copiedCodeId === room.id ? <Check size={11} /> : <Copy size={11} />}
@@ -960,7 +956,7 @@ export default function Dashboard() {
         </main>
       </div>
 
-      {/* Cohort Commission Modal */}
+      {/* Create Room Modal */}
       {showCreateModal && (
         <CreateRoomModal
           onClose={() => setShowCreateModal(false)}

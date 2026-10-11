@@ -2,20 +2,12 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
-  BookOpen,
-  Clock,
-  Target,
-  Users,
-  Shield,
   CheckCircle2,
   Circle,
   Flame,
   ArrowUpRight,
   Volume2,
   Lock,
-  Compass,
-  FileText,
-  Sparkles,
   ChevronRight
 } from 'lucide-react';
 import './Landing.css';
@@ -105,7 +97,7 @@ export default function Landing() {
     item4: false
   });
 
-  const filteredChambers = activeTab === 'ALL'
+  const filteredRooms = activeTab === 'ALL'
     ? SCHEDULE_BOARD
     : SCHEDULE_BOARD.filter(item => item.category === activeTab);
 
@@ -120,12 +112,12 @@ export default function Landing() {
             <span className="sp-rail-monogram">SP</span>
             <div className="sp-rail-brand-meta">
               <span className="sp-rail-title">StudyPact</span>
-              <span className="sp-rail-version">PROTOCOL V2.4</span>
+              <span className="sp-rail-version">STUDY PLATFORM</span>
             </div>
           </Link>
           <div className="sp-rail-live-badge">
             <span className="live-dot-pulse"></span>
-            <span>1,480 Scholars Live</span>
+            <span>1,480 Students Studying Now</span>
           </div>
         </div>
 
@@ -142,7 +134,7 @@ export default function Landing() {
           </a>
           <a href="#schedule-board" className="sp-rail-link">
             <span className="link-num">03</span>
-            <span className="link-name">Chamber Directory</span>
+            <span className="link-name">Study Rooms</span>
           </a>
           <a href="#three-rules" className="sp-rail-link">
             <span className="link-num">04</span>
@@ -150,14 +142,14 @@ export default function Landing() {
           </a>
           <a href="#covenant" className="sp-rail-link">
             <span className="link-num">05</span>
-            <span className="link-name">The Covenant</span>
+            <span className="link-name">Daily Goals</span>
           </a>
         </nav>
 
         {/* Quick Room Access */}
         <div className="sp-rail-quickbox">
-          <span className="quickbox-title">CHAMBER QUICK-KEY</span>
-          <p className="quickbox-desc">Enter room code to sync directly into an active session:</p>
+          <span className="quickbox-title">ROOM QUICK-ACCESS</span>
+          <p className="quickbox-desc">Enter a room code to jump straight into a study room:</p>
           <div className="quickbox-input-row">
             <input
               type="text"
@@ -182,7 +174,7 @@ export default function Landing() {
             Sign In to StudyPact
           </Link>
           <Link to="/signup" className="btn btn-primary btn-sm sp-rail-auth-btn">
-            Create Scholar Account
+            Create Free Account
           </Link>
           <div className="sp-rail-copyright">
             &copy; 2026 StudyPact. Built for competitive exam discipline.
@@ -197,7 +189,7 @@ export default function Landing() {
         {/* Top Header Bar for Mobile / Tablet */}
         <div className="sp-stage-topbar">
           <div className="topbar-crumb">
-            <span>STUDYPACT PROTOCOL</span>
+            <span>STUDYPACT</span>
             <span className="crumb-sep">/</span>
             <span className="crumb-active">NATIONAL EXAMINATION LEDGER</span>
           </div>
@@ -210,7 +202,7 @@ export default function Landing() {
         {/* Section 01: Hero Manifesto */}
         <section id="manifesto" className="stage-section hero-manifesto-block">
           <div className="manifesto-provenance">
-            <span className="provenance-chip">SYNCHRONIZED FOCUS CHAMBERS</span>
+            <span className="provenance-chip">SYNCHRONIZED STUDY ROOMS</span>
             <span className="provenance-text">UPSC &middot; GATE &middot; JEE &middot; NEET &middot; CAT</span>
           </div>
 
@@ -219,16 +211,16 @@ export default function Landing() {
           </h1>
 
           <p className="manifesto-lede">
-            Solitary preparation breeds silent procrastination. StudyPact binds serious students into synchronized focus chambers—where your daily syllabus targets are stated in public, your Pomodoro intervals run in lockstep, and your streaks are defended together.
+            Studying alone can make staying focused difficult. StudyPact brings students together in synchronized study rooms—where you set daily goals, follow Pomodoro cycles together, and build consistent study habits with peers.
           </p>
 
           <div className="manifesto-cta-row">
             <Link to="/signup" className="btn btn-primary btn-lg manifesto-btn">
-              <span>Enroll In Today’s Pact</span>
+              <span>Start Studying Now</span>
               <ArrowRight size={16} />
             </Link>
             <a href="#schedule-board" className="btn btn-secondary btn-lg">
-              <span>Inspect Live Chambers</span>
+              <span>Browse Study Rooms</span>
               <ChevronRight size={16} />
             </a>
           </div>
@@ -269,7 +261,7 @@ export default function Landing() {
               <div className="hud-ribbon-left">
                 <span className="hud-live-tag">
                   <span className="live-pulsar"></span>
-                  CHAMBER ACTIVE // SYNCHRONIZED POMODORO
+                  ROOM ACTIVE // SYNCHRONIZED POMODORO
                 </span>
                 <span className="hud-room-id">ROOM // UP-7891 (GS-1 MAINS ANSWER DRILL)</span>
               </div>
@@ -305,13 +297,13 @@ export default function Landing() {
                 </div>
                 <div className="hud-streak-counter">
                   <Flame size={14} className="streak-flame-icon" />
-                  <span>Chamber Group Streak: <strong>18 Consecutive Days</strong></span>
+                  <span>Group Study Streak: <strong>18 Consecutive Days</strong></span>
                 </div>
               </div>
 
               {/* HUD Col 2: Today's Non-Negotiable Syllabus Agenda */}
               <div className="hud-col hud-agenda-col">
-                <span className="hud-col-label">SESSION SYLLABUS AGENDA (LOCKED)</span>
+                <span className="hud-col-label">TODAY'S STUDY GOALS</span>
                 <div className="hud-agenda-items">
                   <div
                     className={`agenda-item ${activeChecklist.item1 ? 'done' : ''}`}
@@ -342,12 +334,12 @@ export default function Landing() {
                     <span>Previous Year Prelims MCQ Drill (50 Qs)</span>
                   </div>
                 </div>
-                <span className="hud-note">* All agenda items must be marked verified before chamber discharge.</span>
+                <span className="hud-note">* Check off your study goals as you complete each session.</span>
               </div>
 
               {/* HUD Col 3: Peer Accountability Matrix */}
               <div className="hud-col hud-peers-col">
-                <span className="hud-col-label">ACTIVE SCHOLAR MANIFEST (18 ONLINE)</span>
+                <span className="hud-col-label">ACTIVE STUDENTS ONLINE (18)</span>
                 <div className="hud-peer-rows">
                   <div className="peer-row">
                     <span className="peer-av av-1">AR</span>
@@ -395,13 +387,13 @@ export default function Landing() {
           <div className="section-brow">§ 03 / LIVE DIRECTORY</div>
           <div className="directory-header-row">
             <div>
-              <h2 className="stage-section-title">The National Chamber Register</h2>
+              <h2 className="stage-section-title">Active Study Rooms</h2>
               <p className="stage-section-sub">
-                Real-time active cohorts. Select an examination track to find peers at your exact level.
+                Real-time active study rooms. Select an examination track to find peers studying your subject.
               </p>
             </div>
             <Link to="/signup" className="btn btn-primary btn-sm">
-              Form New Chamber
+              Create Study Room
             </Link>
           </div>
 
@@ -413,7 +405,7 @@ export default function Landing() {
                 onClick={() => setActiveTab(tab)}
                 className={`board-filter-pill ${activeTab === tab ? 'active' : ''}`}
               >
-                {tab === 'ALL' ? 'All National Chambers' : `${tab} Track`}
+                {tab === 'ALL' ? 'All Study Rooms' : `${tab} Track`}
               </button>
             ))}
           </div>
@@ -425,15 +417,15 @@ export default function Landing() {
                 <tr>
                   <th style={{ width: '90px' }}>TRACK</th>
                   <th style={{ width: '110px' }}>CODE</th>
-                  <th>CHAMBER & CURRENT SYLLABUS DRILL</th>
+                  <th>STUDY ROOM & TOPIC</th>
                   <th style={{ width: '130px' }}>OCCUPANCY</th>
-                  <th style={{ width: '110px' }}>CADENCE</th>
-                  <th style={{ width: '120px' }}>TARGET PACT</th>
+                  <th style={{ width: '110px' }}>TIMER</th>
+                  <th style={{ width: '120px' }}>DAILY TARGET</th>
                   <th style={{ width: '100px', textAlign: 'right' }}>ACTION</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredChambers.map(row => (
+                {filteredRooms.map(row => (
                   <tr key={row.code} className="ledger-row">
                     <td>
                       <span className={`badge ${row.badgeClass}`}>{row.category}</span>
@@ -486,46 +478,46 @@ export default function Landing() {
           <div className="principles-dossier-grid">
             <div className="dossier-block">
               <div className="dossier-index">RULE I</div>
-              <h3 className="dossier-heading">The Public Covenant Before The Door Unlocks</h3>
+              <h3 className="dossier-heading">Daily Goals Before Starting Your Study Session</h3>
               <p className="dossier-body">
-                You cannot enter a StudyPact chamber without specifying today’s non-negotiable syllabus milestones. There are no silent lurkers. Every student inside has declared their targets to the group.
+                Set your daily study goals before joining the group. Clear targets keep you on track and motivated throughout the session.
               </p>
-              <div className="dossier-footer-tag">ELIMINATES UNSTRUCTURED PROCRASTINATION</div>
+              <div className="dossier-footer-tag">STRUCTURED & FOCUSED STUDY SESSIONS</div>
             </div>
 
             <div className="dossier-block">
               <div className="dossier-index">RULE II</div>
-              <h3 className="dossier-heading">Synchronized 50/10 Focus Lockdown</h3>
+              <h3 className="dossier-heading">Synchronized 50/10 Pomodoro Cycles</h3>
               <p className="dossier-body">
-                Individual timers create friction. In StudyPact, the entire chamber enters and exits focus periods simultaneously. When the clock starts, all microphones mute and the door seals.
+                Individual timers create friction. In StudyPact, the entire study room enters and exits focus periods simultaneously so everyone stays on track.
               </p>
-              <div className="dossier-footer-tag">COLLECTIVE MOMENTUM & PEER PRESSURE</div>
+              <div className="dossier-footer-tag">COLLECTIVE FOCUS & MUTUAL SUPPORT</div>
             </div>
 
             <div className="dossier-block">
               <div className="dossier-index">RULE III</div>
-              <h3 className="dossier-heading">Unforgiving Streaks & Social Accountability</h3>
+              <h3 className="dossier-heading">Daily Streaks & Social Accountability</h3>
               <p className="dossier-body">
-                Skipping a day without notifying your cohort damages your pact rating. Peer accountability replaces fickle motivation with relentless social expectation.
+                Consistency beats cramming. Study alongside dedicated friends, defend your daily streak, and build genuine study momentum together.
               </p>
-              <div className="dossier-footer-tag">PROOF OF DISCIPLINE NOT MOTIVATION</div>
+              <div className="dossier-footer-tag">DAILY HABIT & REAL PROGRESS</div>
             </div>
           </div>
         </section>
 
-        {/* Section 05: The Covenant Block */}
+        {/* Section 05: Daily Goals Block */}
         <section id="covenant" className="stage-section covenant-final-block">
           <div className="covenant-monolith">
-            <div className="covenant-stamp">SEALED UNDER STUDYPACT PROTOCOL</div>
+            <div className="covenant-stamp">BUILT FOR FOCUSED STUDENTS</div>
             <h2 className="covenant-quote">
-              "Preparation is won in the quiet hours when nobody is watching. Study with peers who make sure you never negotiate with weakness."
+              "Consistent daily practice is the secret to cracking competitive exams. Study with peers who keep you motivated every day."
             </h2>
             <p className="covenant-attribution">
               Designed exclusively for aspirants of UPSC, GATE, JEE, NEET, and serious competitive examinations.
             </p>
             <div className="covenant-buttons">
               <Link to="/signup" className="btn btn-primary btn-lg cta-gold">
-                <span>Accept The Pact &middot; Enroll Today</span>
+                <span>Join StudyPact &middot; Get Started Free</span>
                 <ArrowRight size={16} />
               </Link>
             </div>
@@ -537,7 +529,7 @@ export default function Landing() {
           <div className="footer-meta-col">
             <div className="footer-wordmark">StudyPact</div>
             <p className="footer-sub">
-              The national synchronous study room protocol. Built for deep work, non-negotiable targets, and long-distance discipline.
+              Study together, track daily goals, and stay accountable with focused peers. Built for deep work, non-negotiable targets, and long-distance discipline.
             </p>
           </div>
           <div className="footer-col">

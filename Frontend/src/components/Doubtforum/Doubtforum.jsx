@@ -2,18 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
     ArrowLeft,
-    HelpCircle,
     Paperclip,
     Send,
     MessageSquare,
-    CheckCircle2,
     Clock,
     X,
     Image as ImageIcon,
     Shield,
-    Sparkles,
-    Search,
-    BookOpen
 } from 'lucide-react';
 import {
     createDoubt,
@@ -52,13 +47,13 @@ const readImage = (file) => new Promise((resolve, reject) => {
 
 const formatDoubt = (doubt) => ({
     id: doubt.id,
-    author: doubt.authorName || 'Scholar',
+    author: doubt.authorName || 'Student',
     text: doubt.content,
     images: doubt.images || [],
     createdAt: doubt.createdAt,
     replies: (doubt.replies || []).map((reply) => ({
         id: reply.id,
-        author: reply.authorName || 'Scholar',
+        author: reply.authorName || 'Student',
         text: reply.content,
         createdAt: reply.createdAt,
     })),
@@ -280,7 +275,7 @@ const DoubtForum = () => {
             const reply = await createDoubtReply(id, doubtId, text);
             const formattedReply = {
                 id: reply.id,
-                author: reply.authorName || 'Scholar',
+                author: reply.authorName || 'Student',
                 text: reply.content,
                 createdAt: reply.createdAt,
             };
@@ -315,25 +310,25 @@ const DoubtForum = () => {
                 <div className="sp-tribunal-bar-left">
                     <Link to={`/study-room/${id}`} className="sp-tribunal-back-btn">
                         <ArrowLeft size={16} />
-                        <span>Return to Chamber</span>
+                        <span>Back to Study Room</span>
                     </Link>
                     <div className="sp-tribunal-chamber-tag">
-                        CHAMBER #{id?.slice(0, 8) || 'MAIN'}
+                        ROOM #{id?.slice(0, 8) || 'MAIN'}
                     </div>
                 </div>
 
                 <div className="sp-tribunal-bar-center">
-                    <span className="sp-tribunal-seal">§</span>
+                    <span className="sp-tribunal-seal">?</span>
                     <div>
-                        <h1 className="sp-tribunal-title">Academic Inquiry Tribunal</h1>
-                        <span className="sp-tribunal-sub">Concept Scrutiny & Peer Resolution</span>
+                        <h1 className="sp-tribunal-title">Doubt Forum</h1>
+                        <span className="sp-tribunal-sub">Ask Questions & Learn Together</span>
                     </div>
                 </div>
 
                 <div className="sp-tribunal-bar-right">
                     <div className="sp-tribunal-metric-badge">
                         <MessageSquare size={13} />
-                        <span>{doubts.length} Inquiries Filed</span>
+                        <span>{doubts.length} Doubts Posted</span>
                     </div>
                 </div>
             </header>
@@ -349,10 +344,10 @@ const DoubtForum = () => {
                     {/* Inquiry Submission Box */}
                     <div className="sp-inquiry-box">
                         <div className="sp-inquiry-header">
-                            <span className="sp-inquiry-eyebrow">ARTICLE IX · PETITION</span>
-                            <h3 className="sp-inquiry-title">Lodge Scholarly Inquiry</h3>
+                            <span className="sp-inquiry-eyebrow">STUDY ROOM Q&A</span>
+                            <h3 className="sp-inquiry-title">Ask a Question</h3>
                             <p className="sp-inquiry-sub">
-                                Submit specific doubts, derivations, or problem sets for peer dissection.
+                                Have a doubt about a problem or concept? Ask your study group here.
                             </p>
                         </div>
 
@@ -366,7 +361,7 @@ const DoubtForum = () => {
                             <textarea
                                 id="doubt-text"
                                 className="sp-inquiry-textarea"
-                                placeholder="Describe the conceptual impasse, state the question source (PYQ/mock), and detail your attempt..."
+                                placeholder="Explain what you are stuck on, mention the topic/source, and share your attempt..."
                                 value={draftText}
                                 onChange={(e) => setDraftText(e.target.value)}
                                 rows={4}
@@ -380,8 +375,8 @@ const DoubtForum = () => {
                                     <Paperclip size={14} />
                                     <span>
                                         {draftImages.length
-                                            ? `${draftImages.length} of ${MAX_IMAGE_COUNT} Diagram(s) Attached`
-                                            : 'Attach Problem Sheet / Diagram (Max 3)'}
+                                            ? `${draftImages.length} of ${MAX_IMAGE_COUNT} Image(s) Attached`
+                                            : 'Attach images or diagrams (Max 3)'}
                                     </span>
                                     <input
                                         type="file"
@@ -444,7 +439,7 @@ const DoubtForum = () => {
                                 disabled={posting || !draftText.trim()}
                             >
                                 <Send size={14} />
-                                <span>{uploading ? 'Uploading Diagrams...' : posting ? 'Lodging Query...' : 'Lodge Inquiry to Chamber'}</span>
+                                <span>{uploading ? 'Uploading images...' : posting ? 'Posting doubt...' : 'Post Doubt'}</span>
                             </button>
                         </form>
                     </div>
@@ -453,17 +448,17 @@ const DoubtForum = () => {
                     <div className="sp-canons-box">
                         <div className="sp-canons-header">
                             <Shield size={16} className="sp-canons-icon" />
-                            <h4 className="sp-canons-title">Tribunal Disputation Code</h4>
+                            <h4 className="sp-canons-title">Tips for Asking Questions</h4>
                         </div>
                         <ul className="sp-canons-list">
                             <li>
-                                <strong>Canon I:</strong> State the exact proposition or source paper.
+                                <strong>Tip 1:</strong> Mention the specific concept or question source.
                             </li>
                             <li>
-                                <strong>Canon II:</strong> Reveal your prior attempt to isolate the misunderstanding.
+                                <strong>Tip 2:</strong> Share what you have tried so others understand your doubt.
                             </li>
                             <li>
-                                <strong>Canon III:</strong> Confirm solutions that withstand examination logic.
+                                <strong>Tip 3:</strong> Reply or confirm once your doubt is resolved.
                             </li>
                         </ul>
                     </div>
@@ -481,21 +476,21 @@ const DoubtForum = () => {
                                 className={`sp-docket-tab ${activeFilter === 'all' ? 'active' : ''}`}
                                 onClick={() => setActiveFilter('all')}
                             >
-                                All Inquiries ({doubts.length})
+                                All Doubts ({doubts.length})
                             </button>
                             <button
                                 type="button"
                                 className={`sp-docket-tab ${activeFilter === 'unanswered' ? 'active' : ''}`}
                                 onClick={() => setActiveFilter('unanswered')}
                             >
-                                Awaiting Solution ({doubts.filter(d => d.replies.length === 0).length})
+                                Unanswered ({doubts.filter(d => d.replies.length === 0).length})
                             </button>
                             <button
                                 type="button"
                                 className={`sp-docket-tab ${activeFilter === 'with_images' ? 'active' : ''}`}
                                 onClick={() => setActiveFilter('with_images')}
                             >
-                                With Diagrams ({doubts.filter(d => d.images?.length > 0).length})
+                                With Images ({doubts.filter(d => d.images?.length > 0).length})
                             </button>
                         </div>
                     </div>
@@ -503,7 +498,7 @@ const DoubtForum = () => {
                     {loading && (
                         <div className="sp-docket-loading">
                             <div className="sp-spinner"></div>
-                            <span>Retrieving chamber dispute records...</span>
+                            <span>Loading doubts...</span>
                         </div>
                     )}
 
@@ -542,9 +537,9 @@ const DoubtForum = () => {
                                             </div>
 
                                             <div className="sp-query-status-badge">
-                                                <span className="sp-query-serial">CASE #{String(idx + 1).padStart(2, '0')}</span>
+                                                <span className="sp-query-serial">#{String(idx + 1).padStart(2, '0')}</span>
                                                 <span className={`sp-status-tag ${hasReplies ? 'resolved' : 'pending'}`}>
-                                                    {hasReplies ? 'UNDER DISCUSSION' : 'OPEN FOR SCRUTINY'}
+                                                    {hasReplies ? 'ANSWERED' : 'UNANSWERED'}
                                                 </span>
                                             </div>
                                         </div>
@@ -567,7 +562,7 @@ const DoubtForum = () => {
                                                             alt="Attached problem diagram"
                                                             className="sp-gallery-thumb"
                                                         />
-                                                        <span className="sp-gallery-zoom-hint">Inspect ↗</span>
+                                                        <span className="sp-gallery-zoom-hint">View full image ↗</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -582,10 +577,10 @@ const DoubtForum = () => {
                                             >
                                                 <MessageSquare size={14} />
                                                 <span>
-                                                    {doubt.replies.length} {doubt.replies.length === 1 ? 'Scholar Response' : 'Scholar Responses'}
+                                                    {doubt.replies.length} {doubt.replies.length === 1 ? 'Reply' : 'Replys'}
                                                 </span>
                                                 <span className="sp-counter-action">
-                                                    {isReplying ? 'Collapse ↑' : 'Contribute Resolution ↓'}
+                                                    {isReplying ? 'Collapse ↑' : 'Reply ↓'}
                                                 </span>
                                             </button>
                                         </div>
@@ -616,7 +611,7 @@ const DoubtForum = () => {
                                                 <input
                                                     type="text"
                                                     className="sp-inline-reply-input"
-                                                    placeholder="Formulate constructive derivation or solution..."
+                                                    placeholder="Write your reply or solution..."
                                                     value={replyDrafts[doubt.id] || ''}
                                                     onChange={(e) =>
                                                         setReplyDrafts((prev) => ({ ...prev, [doubt.id]: e.target.value }))
@@ -633,7 +628,7 @@ const DoubtForum = () => {
                                                     onClick={() => void handleReplySubmit(doubt.id)}
                                                     disabled={replyingId === doubt.id || !(replyDrafts[doubt.id] || '').trim()}
                                                 >
-                                                    {replyingId === doubt.id ? 'Submitting...' : 'Post Solution'}
+                                                    {replyingId === doubt.id ? 'Submitting...' : 'Post Reply'}
                                                 </button>
                                             </div>
                                         )}
@@ -644,9 +639,9 @@ const DoubtForum = () => {
                             {filteredDoubts.length === 0 && (
                                 <div className="sp-docket-empty">
                                     <div className="sp-empty-case-monogram">§</div>
-                                    <h3 className="sp-empty-case-title">The Tribunal Docket is Clear</h3>
+                                    <h3 className="sp-empty-case-title">No doubts posted yet</h3>
                                     <p className="sp-empty-case-sub">
-                                        No academic impasses registered for this chamber filter. Lodge the first question in the studio on the left.
+                                        No questions found for this filter. Ask the first doubt using the form on the left!
                                     </p>
                                 </div>
                             )}

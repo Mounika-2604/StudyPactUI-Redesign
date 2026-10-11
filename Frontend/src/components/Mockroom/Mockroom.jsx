@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useParams } from 'react-router-dom';
+import { HelpCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import {
   getEvaluationDiscussion,
@@ -34,6 +35,7 @@ const formatFileSize = (bytes) => {
 
 const MockRoom = () => {
   const { id } = useParams();
+  const location = useLocation();
   const { user } = useAuth();
   const sessionId = id;
 
@@ -65,9 +67,61 @@ const MockRoom = () => {
   const [isStartingExam, setIsStartingExam] = useState(false);
   const fileInputRef = useRef(null);
   const timerRef = useRef(null);
+  const mockRoomChannelRef = useRef(null);
   const serverTimeOffsetRef = useRef(0);
   const draftSaveTimerRef = useRef(null);
   const draftSaveQueueRef = useRef(Promise.resolve());
+  const restoredAssignmentRef = useRef(null);
+
+  const applySessionPayload = useCallback((payload) => {
+    const session = payload?.session;
+    const nextPaper = payload?.paper;
+    if (!session || !nextPaper || !Array.isArray(nextPaper.questions)) {
+      throw new Error('Mock session response is missing its selected paper or question list.');
+    }
+    if (!nextPaper.documentUrl && nextPaper.questions.length === 0) {
+      throw new Error('The selected paper response contains no questions or question-paper PDF.');
+    }
+
+    setPaper(nextPaper);
+    setSubmission(payload?.submission ?? null);
+
+    const serverNow = payload?.serverNow ? Date.parse(payload.serverNow) : Date.now();
+    serverTimeOffsetRef.current = Number.isFinite(serverNow) ? serverNow - Date.now() : 0;
+    const currentServerTime = Date.now() + serverTimeOffsetRef.current;
+    const endsAtMs = session.endsAt ? Date.parse(session.endsAt) : NaN;
+    const submissionDeadlineAt = payload?.submissionDeadlineAt
+      || (Number.isFinite(endsAtMs)
+        ? new Date(endsAtMs + SUBMISSION_WINDOW_SECONDS * 1000).toISOString()
+        : null);
+    const submissionDeadlineMs = submissionDeadlineAt ? Date.parse(submissionDeadlineAt) : NaN;
+    const secondsLeft = Number.isFinite(endsAtMs)
+      ? Math.max(0, Math.ceil((endsAtMs - currentServerTime) / 1000))
+      : 0;
+    const submissionSecondsLeft = Number.isFinite(submissionDeadlineMs)
+      ? Math.max(0, Math.ceil((submissionDeadlineMs - currentServerTime) / 1000))
+      : 0;
+    setTimeRemaining(secondsLeft);
+    setExamDurationMinutes(session.durationSeconds
+      ? String(Math.ceil(session.durationSeconds / 60))
+      : '');
+    setSessionData({
+      ...session,
+      attempt: payload.attempt ?? null,
+      submissionDeadlineAt,
+    });
+
+    if (session.status === 'draft') {
+      setPhase('draft');
+    } else if (Number.isFinite(endsAtMs) && currentServerTime >= endsAtMs) {
+      setTimeRemaining(submissionSecondsLeft);
+      setPhase(submissionSecondsLeft > 0 ? 'submission-window' : 'closed');
+    } else if (session.status === 'live') {
+      setPhase('live');
+    } else {
+      setPhase('closed');
+    }
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -84,58 +138,8 @@ const MockRoom = () => {
       try {
         const response = await getMockSession(sessionId);
         const payload = response?.data ?? response;
-        const session = payload?.session;
-        const nextPaper = payload?.paper;
-        const nextSubmission = payload?.submission ?? null;
-        if (!session || !nextPaper || !Array.isArray(nextPaper.questions)) {
-          throw new Error('Mock session response is missing its selected paper or question list.');
-        }
-        if (!nextPaper.documentUrl && nextPaper.questions.length === 0) {
-          throw new Error('The selected paper response contains no questions or question-paper PDF.');
-        }
-
         if (!isMounted) return;
-
-        setPaper(nextPaper);
-        setSubmission(nextSubmission);
-
-        const serverNow = payload?.serverNow ? Date.parse(payload.serverNow) : Date.now();
-        serverTimeOffsetRef.current = Number.isFinite(serverNow) ? serverNow - Date.now() : 0;
-        const currentServerTime = Date.now() + serverTimeOffsetRef.current;
-        const sessionEndsAt = session?.endsAt || payload?.endsAt || null;
-        const endsAtMs = sessionEndsAt ? Date.parse(sessionEndsAt) : NaN;
-        const submissionDeadlineAt = payload?.submissionDeadlineAt
-          || (Number.isFinite(endsAtMs)
-            ? new Date(endsAtMs + SUBMISSION_WINDOW_SECONDS * 1000).toISOString()
-            : null);
-        const submissionDeadlineMs = submissionDeadlineAt ? Date.parse(submissionDeadlineAt) : NaN;
-        const secondsLeft = Number.isFinite(endsAtMs)
-          ? Math.max(0, Math.ceil((endsAtMs - currentServerTime) / 1000))
-          : 0;
-        const submissionSecondsLeft = Number.isFinite(submissionDeadlineMs)
-          ? Math.max(0, Math.ceil((submissionDeadlineMs - currentServerTime) / 1000))
-          : 0;
-        setTimeRemaining(secondsLeft);
-        setExamDurationMinutes(session?.durationSeconds
-          ? String(Math.ceil(session.durationSeconds / 60))
-          : '');
-        const sessionView = {
-          ...session,
-          attempt: payload.attempt ?? null,
-          submissionDeadlineAt,
-        };
-        setSessionData(sessionView);
-
-        if (session?.status === 'draft') {
-          setPhase('draft');
-        } else if (Number.isFinite(endsAtMs) && currentServerTime >= endsAtMs) {
-          setTimeRemaining(submissionSecondsLeft);
-          setPhase(submissionSecondsLeft > 0 ? 'submission-window' : 'closed');
-        } else if (session?.status === 'live') {
-          setPhase('live');
-        } else {
-          setPhase('closed');
-        }
+        applySessionPayload(payload);
       } catch (loadError) {
         if (isMounted) {
           setError(loadError?.message || 'Unable to load the mock session.');
@@ -151,7 +155,50 @@ const MockRoom = () => {
     return () => {
       isMounted = false;
     };
-  }, [sessionId]);
+  }, [applySessionPayload, sessionId]);
+
+  useEffect(() => {
+    if (!sessionId || !supabase) return undefined;
+
+    let isCurrent = true;
+    const refreshSession = async () => {
+      try {
+        const response = await getMockSession(sessionId);
+        if (!isCurrent) return;
+        const payload = response?.data ?? response;
+        applySessionPayload(payload);
+        const endsAt = payload?.session?.endsAt;
+        if (endsAt && Date.parse(endsAt) <= Date.now()) {
+          const overview = await getPeerEvaluations(sessionId);
+          if (isCurrent) {
+            setPeerEvaluation(overview);
+            if (overview?.available) {
+              setTimeRemaining(0);
+              setPhase('closed');
+            }
+          }
+        }
+      } catch (refreshError) {
+        if (isCurrent) {
+          console.error('Unable to refresh mock session state:', refreshError);
+          setError(refreshError?.message || 'Unable to refresh the mock session.');
+        }
+      }
+    };
+    const channel = supabase
+      .channel(`mock-room:${sessionId}`)
+      .on('broadcast', { event: 'session-updated' }, refreshSession)
+      .on('broadcast', { event: 'submission-updated' }, refreshSession);
+
+    mockRoomChannelRef.current = channel;
+    channel.subscribe();
+
+    return () => {
+      isCurrent = false;
+      if (mockRoomChannelRef.current === channel) mockRoomChannelRef.current = null;
+      void supabase.removeChannel(channel);
+    };
+  }, [applySessionPayload, sessionId]);
 
   useEffect(() => {
     if (!sessionData || (phase !== 'live' && phase !== 'submission-window')) return undefined;
@@ -356,6 +403,13 @@ const MockRoom = () => {
         Date.parse(startedSession.endsAt) - Date.now() - serverTimeOffsetRef.current
       ) / 1000)));
       setPhase('live');
+      void mockRoomChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'session-updated',
+        payload: { status: 'live' },
+      })?.catch((broadcastError) => {
+        console.error('Unable to broadcast mock session start:', broadcastError);
+      });
     } catch (startError) {
       setError(startError?.message || 'Unable to start the mock exam.');
     } finally {
@@ -404,6 +458,22 @@ const MockRoom = () => {
 
       if (response?.status === 'SUBMITTED' || response?.data?.status === 'SUBMITTED' || response?.id) {
         setSubmission(response?.data || response || null);
+        const sessionResponse = await getMockSession(sessionId);
+        const sessionPayload = sessionResponse?.data ?? sessionResponse;
+        applySessionPayload(sessionPayload);
+        const overview = await getPeerEvaluations(sessionId);
+        if (overview?.available) {
+          setPeerEvaluation(overview);
+          setTimeRemaining(0);
+          setPhase('closed');
+        }
+        void mockRoomChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'submission-updated',
+          payload: { status: 'SUBMITTED' },
+        })?.catch((broadcastError) => {
+          console.error('Unable to broadcast mock submission:', broadcastError);
+        });
       } else {
         throw new Error(response?.message || 'Upload failed.');
       }
@@ -433,11 +503,27 @@ const MockRoom = () => {
         assignmentId: evaluation.assignmentId,
         participantName: evaluation.participantName,
       });
+      return true;
     } catch (loadError) {
       console.error('Unable to open peer evaluation:', loadError);
       setPeerEvaluationError(loadError?.message || 'Unable to open this peer evaluation.');
+      return false;
     }
   };
+
+  useEffect(() => {
+    const assignmentId = location.state?.assignmentId;
+    if (
+      !assignmentId
+      || restoredAssignmentRef.current === assignmentId
+      || !peerEvaluation?.available
+    ) return;
+    const assignment = peerEvaluation.assignments.find((item) => item.id === assignmentId);
+    if (!assignment) return;
+    void handleOpenPeerAssignment(assignment).then((restored) => {
+      if (restored) restoredAssignmentRef.current = assignmentId;
+    });
+  }, [location.state, peerEvaluation]);
 
   const handleOpenAuthorDiscussion = (evaluation) => {
     setDiscussionError('');
@@ -521,15 +607,15 @@ const MockRoom = () => {
 
   if (sessionLoading) {
     return (
-      <div className="mr-page">
-        <div className="mr-loading">Loading mock session…</div>
+      <div className={`mr-page ${phase === 'live' ? 'mr-live-page' : ''}`}>
+        <div className="mr-loading">Loading mock session...</div>
       </div>
     );
   }
 
   if (!sessionData && !paper) {
     return (
-      <div className="mr-page">
+      <div className={`mr-page ${phase === 'live' ? 'mr-live-page' : ''}`}>
         <div className="mr-loading" role={error ? 'alert' : 'status'}>
           {error || 'Mock session not found.'}
         </div>
@@ -538,12 +624,12 @@ const MockRoom = () => {
   }
 
   return (
-    <div className="mr-page">
+    <div className={`mr-page ${phase === 'live' ? 'mr-live-page' : ''}`}>
       <header className="mr-topbar">
         <div className="mr-room-info">
           <span className="mr-badge">{paper?.examTag || 'Mock'}</span>
           <h1 className="mr-title">
-            {paper ? `${paper.examTag} ${paper.examYear ?? ''} · ${paper.paperName || paper.title}` : 'Mock Exam'}
+            {paper ? `${paper.examTag} ${paper.examYear ?? ''} • ${paper.paperName || paper.title}` : 'Mock Exam'}
           </h1>
         </div>
         <Link to={sessionData?.roomId ? `/study-room/${sessionData.roomId}` : '/dashboard'} className="mr-link-btn">
@@ -562,7 +648,7 @@ const MockRoom = () => {
 
           {showUploadPanel ? (
             <div className="mr-upload-panel">
-              <h2 className="mr-upload-title">ANSWER SCRIPT SUBMISSION</h2>
+              <h2 className="mr-upload-title">Answer Script Submission</h2>
               {phase === 'submission-window' ? (
                 <>
                   <div className="mr-submission-countdown" role="timer" aria-live="off">
@@ -581,7 +667,7 @@ const MockRoom = () => {
                           onChange={handleFileChange}
                           disabled={!canSubmit || isSubmitting}
                         />
-                        <span>[ Choose PDF ]</span>
+                        <span>Choose PDF File</span>
                       </label>
 
                       {selectedFile ? (
@@ -617,9 +703,9 @@ const MockRoom = () => {
                   Return to the StudyRoom when you are ready.
                 </div>
               ) : null}
-              {phase === 'closed' ? (
+              {phase === 'closed' || peerEvaluation?.available ? (
                 <section className="mr-peer-evaluation" aria-labelledby="mr-peer-evaluation-title">
-                  <h2 id="mr-peer-evaluation-title">PEER EVALUATION</h2>
+                  <h2 id="mr-peer-evaluation-title">Peer Evaluation</h2>
                   {peerEvaluationLoading ? <p>Loading peer evaluations...</p> : null}
                   {peerEvaluationError ? <p className="mr-peer-error" role="alert">{peerEvaluationError}</p> : null}
                   {!peerEvaluationLoading && peerEvaluation && !peerEvaluation.available ? (
@@ -659,9 +745,30 @@ const MockRoom = () => {
                           Complete all assigned peer evaluations to unlock your result.
                         </p>
                       ) : null}
+                      {(() => {
+                        const evaluationContextId = activePeerAssignment?.assignmentId
+                          || discussionAssignment?.assignmentId;
+                        if (!evaluationContextId) return null;
+                        return (
+                          <Link
+                            to={`/doubt-forum/${sessionData.roomId}`}
+                            state={{
+                              returnTo: `/mock-room/${sessionId}`,
+                              assignmentId: evaluationContextId,
+                            }}
+                            className="mr-doubt-entry"
+                          >
+                            <span className="mr-doubt-icon" aria-hidden="true"><HelpCircle size={18} /></span>
+                            <span>
+                              <span className="mr-doubt-title">Doubt Forum — Study Room</span>
+                              <span className="mr-doubt-sub">Ask questions while evaluating peer papers</span>
+                            </span>
+                          </Link>
+                        );
+                      })()}
                       {peerEvaluation.ownResult ? (
                         <div className="mr-peer-result">
-                          <h3>Your evaluated answer script</h3>
+                          <h3>Your Evaluated Script & Feedback</h3>
                           <a href={peerEvaluation.ownResult.downloadUrl} target="_blank" rel="noreferrer">
                             View your answer script
                           </a>
@@ -718,9 +825,9 @@ const MockRoom = () => {
                           </span>
                           <input
                             type="number"
-                            min="0"
+                            min={question.minMarks ?? -2}
                             max={question.maxMarks}
-                            step="0.01"
+                            step="1"
                             value={evaluationScores[question.id] ?? ''}
                             onChange={(event) => setEvaluationScores((current) => ({
                               ...current,

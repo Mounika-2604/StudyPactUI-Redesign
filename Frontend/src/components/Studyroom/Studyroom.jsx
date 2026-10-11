@@ -20,7 +20,8 @@ import {
 import { completeDailyGoal, getTodayDailyGoals } from '../../services/dailyGoalService';
 import { supabase } from '../../services/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
-import './StudyRoom.css';
+import { X, Check, FileText, ArrowRight } from 'lucide-react';
+import './Studyroom.css';
 
 const STATUS_LABEL = {
     studying: 'Studying',
@@ -51,6 +52,14 @@ const StudyRoom = () => {
     const [realtimeError, setRealtimeError] = useState('');
     const [memberError, setMemberError] = useState('');
     const [leaving, setLeaving] = useState(false);
+    const [copiedCode, setCopiedCode] = useState(false);
+
+    const handleCopyCode = () => {
+        if (!room?.roomCode) return;
+        navigator.clipboard?.writeText(room.roomCode);
+        setCopiedCode(true);
+        setTimeout(() => setCopiedCode(false), 2000);
+    };
     const [dailyGoals, setDailyGoals] = useState([]);
     const [dailyGoalsLoading, setDailyGoalsLoading] = useState(true);
     const [dailyGoalsError, setDailyGoalsError] = useState('');
@@ -709,7 +718,8 @@ const StudyRoom = () => {
 
     if (roomLoading) {
         return (
-            <div className="sr-page">
+            <div className="sr-page sr-page-loading">
+                <div className="sr-loading-spinner"></div>
                 <p role="status">Loading room...</p>
             </div>
         );
@@ -717,30 +727,44 @@ const StudyRoom = () => {
 
     if (roomError || !room) {
         return (
-            <div className="sr-page">
-                <p role="alert">{roomError || 'Room not found.'}</p>
-                <Link to="/dashboard" className="sr-link-btn">Back to dashboard</Link>
+            <div className="sr-page sr-page-loading">
+                <div className="sr-error-card">
+                    <p role="alert">{roomError || 'Room not found.'}</p>
+                    <Link to="/dashboard" className="sr-btn sr-btn-outline" style={{ textDecoration: 'none' }}>
+                        Back to dashboard
+                    </Link>
+                </div>
             </div>
         );
     }
 
     return (
         <div className="sr-page">
-
             {/* Top bar */}
             <header className="sr-topbar">
                 <div className="sr-room-info">
-                    <span className="sr-badge">{room.examTag}</span>
+                    <span className="sr-badge">{room.examTag || 'Study'}</span>
                     <h1 className="sr-room-title">{room.title}</h1>
-                    <span className="sr-room-code">Code: {room.roomCode}</span>
+                    <span
+                        className="sr-room-code"
+                        onClick={handleCopyCode}
+                        style={{ cursor: 'pointer' }}
+                        title="Click to copy room code"
+                    >
+                        Code: {room.roomCode} {copiedCode && <span style={{ color: '#5c8a52', fontWeight: 600 }}> (Copied!)</span>}
+                    </span>
                     {room.isLive && (
-                        <>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                             <span className="sr-live-dot" aria-hidden="true"></span>
                             <span className="sr-live-text">Live</span>
-                        </>
+                        </span>
                     )}
                 </div>
-                <div className="sr-topbar-actions">
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <Link to="/dashboard" className="sr-link-btn" style={{ textDecoration: 'none' }}>
+                        Dashboard
+                    </Link>
                     <button
                         type="button"
                         className="sr-link-btn"
@@ -752,39 +776,45 @@ const StudyRoom = () => {
                 </div>
             </header>
 
+            {/* Body grid */}
             <div className="sr-body">
-
-                {/* Left: presence panel */}
+                {/* Left: presence + active mock rooms */}
                 <aside className="sr-panel sr-presence-panel">
-                    <button className="sr-my-status" onClick={cycleStatus}>
+                    <button
+                        className="sr-my-status"
+                        onClick={cycleStatus}
+                        title="Click to cycle status: Studying / Break / Away"
+                    >
                         <span className={`sr-status-dot sr-status-${myStatus}`}></span>
-                        <span>You — {STATUS_LABEL[myStatus]}</span>
+                        <span>You • {STATUS_LABEL[myStatus]}</span>
                     </button>
 
                     <p className="sr-panel-label">Members ({members.length})</p>
                     {memberError && <p className="sr-realtime-error" role="alert">{memberError}</p>}
                     {realtimeError && <p className="sr-realtime-error" role="alert">{realtimeError}</p>}
                     <ul className="sr-member-list">
-                        {members.map((m) => (
-                            <li key={m.id} className="sr-member">
-                                <span className="sr-avatar">{m.name.charAt(0).toUpperCase()}</span>
-                                <div className="sr-member-meta">
-                                    <span className="sr-member-name">
-                                        {m.name}{m.id === user?.id ? ' (You)' : ''}
-                                    </span>
-                                    <span className="sr-member-status">
-                                        <span className={`sr-status-dot sr-status-${m.status}`}></span>
-                                        {STATUS_LABEL[m.status]}
-                                    </span>
-                                </div>
-                            </li>
-                        ))}
+                        {members.map((m) => {
+                            const isMe = m.id === user?.id;
+                            return (
+                                <li key={m.id} className="sr-member">
+                                    <span className="sr-avatar">{m.name.charAt(0).toUpperCase()}</span>
+                                    <div className="sr-member-meta">
+                                        <span className="sr-member-name">
+                                            {m.name}{isMe ? ' (You)' : ''}
+                                        </span>
+                                        <span className="sr-member-status">
+                                            <span className={`sr-status-dot sr-status-${m.status}`}></span>
+                                            {STATUS_LABEL[m.status]}
+                                        </span>
+                                    </div>
+                                </li>
+                            );
+                        })}
                     </ul>
+
                     <section className="sr-active-mock-rooms" aria-labelledby="sr-active-mock-rooms-title">
                         <h2 className="sr-panel-label" id="sr-active-mock-rooms-title">Active Mock Rooms</h2>
-                        {activeMockRoomsError && (
-                            <p className="sr-mock-rooms-error" role="alert">{activeMockRoomsError}</p>
-                        )}
+                        {activeMockRoomsError && <p className="sr-mock-rooms-error" role="alert">{activeMockRoomsError}</p>}
                         {activeMockRoomsLoading ? (
                             <p className="sr-mock-rooms-empty">Loading mock rooms...</p>
                         ) : activeMockRooms.length === 0 ? (
@@ -796,8 +826,7 @@ const StudyRoom = () => {
                                         <div className="sr-mock-room-details">
                                             <h3>{mockRoom.paper.title}</h3>
                                             <p>Created by: {mockRoom.creator.name}</p>
-                                            <p>Paper: {mockRoom.paper.name}</p>
-                                            <p>Status: Waiting to start</p>
+                                            <p>Status: Ready to start</p>
                                         </div>
                                         <button
                                             type="button"
@@ -821,7 +850,9 @@ const StudyRoom = () => {
                             <circle className="sr-ring-bg" cx="60" cy="60" r="52" />
                             <circle
                                 className="sr-ring-progress"
-                                cx="60" cy="60" r="52"
+                                cx="60"
+                                cy="60"
+                                r="52"
                                 style={{ strokeDashoffset: 327 - (327 * progressPercent) / 100 }}
                             />
                         </svg>
@@ -832,14 +863,22 @@ const StudyRoom = () => {
                     </div>
 
                     <div className="sr-timer-controls">
-                        <button className="sr-btn sr-btn-outline" onClick={handleReset}>Reset</button>
                         <button
+                            type="button"
+                            className="sr-btn sr-btn-outline"
+                            onClick={handleReset}
+                        >
+                            Reset
+                        </button>
+                        <button
+                            type="button"
                             className="sr-btn sr-btn-primary"
                             onClick={handleStartPause}
                         >
-                            {isRunning ? 'Pause' : 'Start'}
+                            {isRunning ? 'Pause' : 'Start Focus'}
                         </button>
                     </div>
+
                     {pomodoroError && (
                         <span
                             role="alert"
@@ -863,35 +902,56 @@ const StudyRoom = () => {
                                 setShowPaperSelector(true);
                             }}
                         >
-                            <span className="sr-quick-title">Create Mock Room</span>
-                            <span className="sr-quick-sub">Timed practice + peer review</span>
+                            <div className="sr-quick-content">
+                                <div className="sr-quick-icon-wrap">
+                                    <FileText size={16} className="sr-quick-icon" />
+                                </div>
+                                <div className="sr-quick-text">
+                                    <span className="sr-quick-title">Start a Mock Test</span>
+                                    <span className="sr-quick-sub">Timed exam practice with peer evaluations</span>
+                                </div>
+                            </div>
+                            <div className="sr-quick-action-badge">
+                                <ArrowRight size={13} className="sr-quick-arrow" />
+                            </div>
                         </button>
                     </div>
 
                     <div className="sr-goal-strip">
-                        <span className="sr-goal-strip-label">
-                            My tasks — {completedGoals}/{dailyGoals.length} complete
-                        </span>
+                        <div className="sr-goal-strip-header">
+                            <span className="sr-goal-strip-title">Today's Goals</span>
+                            <span className="sr-goal-strip-count">
+                                {completedGoals}/{dailyGoals.length} completed
+                            </span>
+                        </div>
+
                         {dailyGoalsError && <p className="sr-task-error" role="alert">{dailyGoalsError}</p>}
+
                         <div className="sr-goal-strip-items">
                             {dailyGoalsLoading ? (
-                                <span className="sr-goal-chip">Loading goals...</span>
+                                <span className="sr-goal-chip sr-goal-loading">Loading goals...</span>
                             ) : dailyGoals.length === 0 ? (
-                                <span className="sr-goal-chip">No daily goals set for today.</span>
-                            ) : dailyGoals.map((goal) => (
-                                <label
-                                    key={goal.id}
-                                    className={`sr-goal-chip sr-goal-task ${goal.isCompleted ? 'sr-goal-done' : ''}`}
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={goal.isCompleted}
-                                        onChange={() => toggleDailyGoal(goal)}
-                                        disabled={goal.isCompleted}
-                                    />
-                                    {goal.description}
-                                </label>
-                            ))}
+                                <span className="sr-goal-chip sr-goal-empty">No daily goals set for today yet.</span>
+                            ) : (
+                                dailyGoals.map((goal) => (
+                                    <label
+                                        key={goal.id}
+                                        className={`sr-goal-chip sr-goal-task ${goal.isCompleted ? 'sr-goal-done' : ''}`}
+                                    >
+                                        {goal.isCompleted ? (
+                                            <Check size={12} className="sr-goal-check-icon" />
+                                        ) : (
+                                            <input
+                                                type="checkbox"
+                                                checked={false}
+                                                onChange={() => toggleDailyGoal(goal)}
+                                                className="sr-goal-checkbox"
+                                            />
+                                        )}
+                                        <span className="sr-goal-text">{goal.description}</span>
+                                    </label>
+                                ))
+                            )}
                         </div>
                     </div>
                 </main>
@@ -902,7 +962,7 @@ const StudyRoom = () => {
                         <span className="sr-doubt-icon">💬</span>
                         <div>
                             <span className="sr-doubt-title">Doubt Forum</span>
-                            <span className="sr-doubt-sub">3 open threads</span>
+                            <span className="sr-doubt-sub">Ask questions & discuss solutions</span>
                         </div>
                     </Link>
 
@@ -920,16 +980,23 @@ const StudyRoom = () => {
                                 chatWasNearBottomRef.current = distanceFromBottom <= 100;
                             }}
                         >
-                            {messages.map((m) => (
-                                <div
-                                    key={m.id}
-                                    className={`sr-chat-message ${m.author === 'You' ? 'sr-chat-mine' : ''}`}
-                                >
-                                    <span className="sr-chat-author">{m.author}</span>
-                                    <span className="sr-chat-text">{m.text}</span>
+                            {messages.length === 0 ? (
+                                <div style={{ color: '#8a8474', fontSize: '12px', textAlign: 'center', margin: 'auto 0' }}>
+                                    Say hello to your study partners!
                                 </div>
-                            ))}
+                            ) : (
+                                messages.map((m) => (
+                                    <div
+                                        key={m.id}
+                                        className={`sr-chat-message ${m.author === 'You' ? 'sr-chat-mine' : ''}`}
+                                    >
+                                        <span className="sr-chat-author">{m.author}</span>
+                                        <span className="sr-chat-text">{m.text}</span>
+                                    </div>
+                                ))
+                            )}
                         </div>
+
                         <form className="sr-chat-form" onSubmit={sendMessage}>
                             <input
                                 type="text"
@@ -937,97 +1004,86 @@ const StudyRoom = () => {
                                 onChange={(e) => setDraft(e.target.value)}
                                 placeholder="Message the room..."
                                 className="sr-chat-input"
+                                maxLength={500}
                             />
-                            <button type="submit" className="sr-chat-send">Send</button>
+                            <button
+                                type="submit"
+                                className="sr-chat-send"
+                                disabled={!draft.trim()}
+                                aria-label="Send message"
+                            >
+                                Send
+                            </button>
                         </form>
                     </div>
                 </aside>
-
             </div>
 
             {showPaperSelector && (
-                <div
-                    className="sr-modal-backdrop"
-                    onMouseDown={(event) => {
-                        if (event.target === event.currentTarget && !creatingMockSession) {
-                            setShowPaperSelector(false);
-                        }
-                    }}
-                >
+                <div className="sr-modal-overlay" onClick={() => !creatingMockSession && setShowPaperSelector(false)}>
                     <section
                         className="sr-mock-modal"
                         role="dialog"
                         aria-modal="true"
                         aria-labelledby="sr-mock-modal-title"
-                        onMouseDown={(event) => event.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
                     >
                         <header className="sr-mock-modal-header">
                             <div>
-                                <p className="sr-modal-eyebrow">Study room mock exam</p>
-                                <h2 id="sr-mock-modal-title">Create Mock Exam</h2>
+                                <span className="sr-modal-eyebrow">PRACTICE EXAM</span>
+                                <h2 id="sr-mock-modal-title">Create Mock Test</h2>
                             </div>
                             <button
                                 type="button"
                                 className="sr-modal-close"
                                 aria-label="Close dialog"
-                                onClick={() => setShowPaperSelector(false)}
-                                disabled={creatingMockSession}
+                                onClick={() => !creatingMockSession && setShowPaperSelector(false)}
                             >
-                                ×
+                                <X size={18} />
                             </button>
                         </header>
 
-                        <div className="sr-mock-modal-content">
-                            <fieldset className="sr-source-choice">
-                                <legend>Question paper source</legend>
-                                <label>
+                        <div className="sr-mock-modal-body">
+                            <div className="sr-source-choice-row">
+                                <label className="sr-source-choice">
                                     <input
                                         type="radio"
-                                        name="paper-source"
+                                        name="mock-paper-source"
                                         value="dataset"
                                         checked={paperSource === 'dataset'}
-                                        onChange={() => {
-                                            setPaperSource('dataset');
-                                            setPaperSelectionError('');
-                                        }}
+                                        onChange={() => setPaperSource('dataset')}
                                         disabled={creatingMockSession}
                                     />
-                                    Choose from Dataset
+                                    <span>Question Paper Library</span>
                                 </label>
-                                <label>
+                                <label className="sr-source-choice">
                                     <input
                                         type="radio"
-                                        name="paper-source"
+                                        name="mock-paper-source"
                                         value="custom"
                                         checked={paperSource === 'custom'}
-                                        onChange={() => {
-                                            setPaperSource('custom');
-                                            setPaperSelectionError('');
-                                        }}
+                                        onChange={() => setPaperSource('custom')}
                                         disabled={creatingMockSession}
                                     />
-                                    Upload Custom Paper
+                                    <span>Upload Custom PDF</span>
                                 </label>
-                            </fieldset>
+                            </div>
 
                             {paperSource === 'dataset' ? (
                                 <div className="sr-dataset-picker">
-                                    <label className="sr-paper-select-label" htmlFor="mock-paper-search">
-                                        Choose Question Paper
-                                        <input
-                                            id="mock-paper-search"
-                                            className="sr-paper-select"
-                                            type="search"
-                                            placeholder="Search exam, year, paper or subject"
-                                            value={paperSearch}
-                                            onChange={(event) => setPaperSearch(event.target.value)}
-                                            disabled={creatingMockSession}
-                                        />
-                                    </label>
+                                    <input
+                                        type="search"
+                                        className="sr-dataset-search"
+                                        placeholder="Search papers by exam, subject, or year..."
+                                        value={paperSearch}
+                                        onChange={(event) => setPaperSearch(event.target.value)}
+                                        disabled={creatingMockSession || paperSelectionLoading}
+                                    />
+
                                     {paperSelectionLoading ? (
-                                        <p className="sr-paper-empty" role="status">Loading available papers...</p>
+                                        <p className="sr-paper-loading">Loading question papers...</p>
                                     ) : paperSelectionError ? null : availablePapers.length === 0 ? (
-                                        <p className="sr-paper-empty">No question papers are currently available.</p>
+                                        <p className="sr-paper-empty">No question papers currently available.</p>
                                     ) : (
                                         <div className="sr-dataset-paper-list" role="listbox" aria-label="Dataset question papers">
                                             {availablePapers
@@ -1047,24 +1103,27 @@ const StudyRoom = () => {
                                                         }}
                                                         disabled={creatingMockSession}
                                                     >
-                                                        <span className="sr-dataset-paper-name">{paper.examTag} {paper.examYear ?? ''} · {paper.paperName || paper.title}</span>
+                                                        <span className="sr-dataset-paper-name">
+                                                            {paper.examTag} {paper.examYear ?? ''} • {paper.paperName || paper.title}
+                                                        </span>
                                                         <span className="sr-dataset-paper-meta">
-                                                            {paper.subject || 'Subject not provided'} · {paper.questions?.length ?? 0} questions
-                                                            {paper.evaluationType ? ` · ${paper.evaluationType}` : ''}
+                                                            {paper.subject || 'Subject not specified'} • {paper.questions?.length ?? 0} questions
+                                                            {paper.evaluationType ? ` • ${paper.evaluationType}` : ''}
                                                         </span>
                                                     </button>
                                                 ))}
                                         </div>
                                     )}
+
                                     {selectedPaperId && (() => {
                                         const paper = availablePapers.find((item) => item.id === selectedPaperId);
                                         if (!paper) return null;
                                         return (
                                             <div className="sr-selected-paper" aria-live="polite">
                                                 <strong>{paper.examTag} {paper.examYear ?? ''}</strong>
-                                                <span>{paper.paperName || paper.title} · {paper.subject || 'Subject not provided'}</span>
-                                                <span>Evaluation: {paper.evaluationType || 'Not provided'}</span>
-                                                <span>{paper.totalMarks ? `${paper.totalMarks} marks` : 'Total marks not provided by source'}</span>
+                                                <span>{paper.paperName || paper.title} • {paper.subject || 'Subject'}</span>
+                                                <span>Evaluation: {paper.evaluationType || 'Peer reviewed'}</span>
+                                                <span>{paper.totalMarks ? `${paper.totalMarks} marks` : 'Total marks according to source'}</span>
                                             </div>
                                         );
                                     })()}
@@ -1072,7 +1131,7 @@ const StudyRoom = () => {
                             ) : (
                                 <div className="sr-custom-paper-picker">
                                     <label className="sr-custom-paper-label" htmlFor="custom-question-paper">
-                                        Upload Question Paper
+                                        Choose PDF Question Paper
                                         <input
                                             id="custom-question-paper"
                                             type="file"
@@ -1081,7 +1140,7 @@ const StudyRoom = () => {
                                             disabled={creatingMockSession}
                                         />
                                     </label>
-                                    <p>This PDF is the question paper shown to everyone in this mock room. It is not your answer script.</p>
+                                    <p className="sr-custom-paper-hint">This PDF is the question paper shown to everyone in this mock room during the test.</p>
                                     {customQuestionPaper && (
                                         <p className="sr-custom-paper-file" role="status">
                                             Selected: {customQuestionPaper.name} ({Math.ceil(customQuestionPaper.size / 1024)} KB)
@@ -1090,29 +1149,32 @@ const StudyRoom = () => {
                                 </div>
                             )}
 
-                            <label className="sr-paper-select-label" htmlFor="mock-exam-duration">
-                                Duration (minutes)
+                            <div className="sr-form-group">
+                                <label className="sr-paper-select-label" htmlFor="mock-exam-duration">
+                                    Exam Duration (minutes)
+                                </label>
                                 <input
                                     id="mock-exam-duration"
-                                    className="sr-paper-select sr-duration-input"
+                                    className="sr-input sr-duration-input"
                                     type="number"
                                     min="1"
                                     max="1440"
                                     step="1"
-                                    placeholder="Enter duration"
+                                    placeholder="e.g. 60"
                                     value={examDurationMinutes}
                                     onChange={(event) => setExamDurationMinutes(event.target.value)}
                                     disabled={creatingMockSession}
                                 />
-                            </label>
-                            <p className="sr-duration-note">The exam stays in draft until the creator clicks Start Exam.</p>
+                                <p className="sr-duration-note">The exam starts when you click Start Exam inside the mock room.</p>
+                            </div>
+
                             {paperSelectionError && <p className="sr-paper-error" role="alert">{paperSelectionError}</p>}
                         </div>
 
-                        <footer className="sr-paper-actions sr-modal-actions">
+                        <footer className="sr-modal-actions sr-paper-actions">
                             <button
                                 type="button"
-                                className="sr-btn sr-btn-outline"
+                                className="sr-btn sr-btn-ghost"
                                 onClick={() => setShowPaperSelector(false)}
                                 disabled={creatingMockSession}
                             >
@@ -1123,16 +1185,16 @@ const StudyRoom = () => {
                                 className="sr-btn sr-btn-primary"
                                 disabled={
                                     creatingMockSession
-                                    || paperSelectionLoading && paperSource === 'dataset'
+                                    || (paperSelectionLoading && paperSource === 'dataset')
                                     || !Number.isInteger(Number(examDurationMinutes))
                                     || Number(examDurationMinutes) < 1
                                     || Number(examDurationMinutes) > 1440
-                                    || paperSource === 'dataset' && (!selectedPaperId || !availablePapers.some((paper) => paper.id === selectedPaperId))
-                                    || paperSource === 'custom' && !customQuestionPaper
+                                    || (paperSource === 'dataset' && (!selectedPaperId || !availablePapers.some((paper) => paper.id === selectedPaperId)))
+                                    || (paperSource === 'custom' && !customQuestionPaper)
                                 }
                                 onClick={handleCreateMockSession}
                             >
-                                {creatingMockSession ? 'Creating...' : 'Create Mock Exam'}
+                                {creatingMockSession ? 'Creating...' : 'Create Mock Test'}
                             </button>
                         </footer>
                     </section>
@@ -1143,3 +1205,4 @@ const StudyRoom = () => {
 };
 
 export default StudyRoom;
+

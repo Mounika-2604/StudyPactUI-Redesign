@@ -1121,16 +1121,27 @@
 }
 
 /* ==========================================================================
-   CHARTER MODAL STYLES
+   CHARTER MODAL STYLES (Create a Study Room Modal)
    ========================================================================== */
 .sp-charter-modal {
-  max-width: 520px;
+  max-width: 500px;
   width: 100%;
   background: #FFFFFF;
-  border-radius: 8px;
+  border-radius: 12px;
   border: 1px solid var(--border-hairline, #E6E1D6);
   box-shadow: 0 20px 48px -12px rgba(20, 23, 21, 0.2);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.sp-charter-modal .sp-modal-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border-hairline, #E6E1D6);
+  background: var(--bg-surface-alt, #F4F1EA);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
 }
 
 .sp-charter-tag {
@@ -1140,26 +1151,116 @@
   letter-spacing: 0.08em;
   color: var(--color-terracotta, #BA4A2B);
   display: block;
-  margin-bottom: 2px;
+  margin-bottom: 3px;
+}
+
+.sp-charter-modal .sp-modal-title {
+  font-family: var(--font-heading, "Newsreader", Georgia, serif);
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-main, #141715);
+  margin: 0;
+  letter-spacing: -0.015em;
+}
+
+.sp-charter-modal .sp-modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted, #757D76);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sp-charter-modal .sp-modal-close:hover {
+  background: var(--bg-canvas-subtle, #EFECE4);
+  color: var(--text-main, #141715);
+  border-color: var(--border-hairline, #E6E1D6);
+}
+
+.sp-charter-modal .sp-modal-body {
+  padding: 22px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  background: #FFFFFF;
+}
+
+.sp-charter-modal .sp-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.sp-charter-modal .sp-form-label {
+  display: block;
+  font-family: var(--font-sans, "Plus Jakarta Sans", sans-serif);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-secondary, #484E49);
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+
+.sp-charter-modal .sp-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border-subtle, #DBD5C7);
+  border-radius: 8px;
+  font-family: var(--font-sans, "Plus Jakarta Sans", sans-serif);
+  font-size: 0.88rem;
+  color: var(--text-main, #141715);
+  background: #FFFFFF;
+  outline: none;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.sp-charter-modal .sp-input:focus {
+  border-color: var(--color-terracotta, #BA4A2B);
+  box-shadow: 0 0 0 3px rgba(186, 74, 43, 0.12);
+}
+
+.sp-charter-modal .sp-input::placeholder {
+  color: var(--text-placeholder, #9C988F);
+  font-size: 0.86rem;
 }
 
 .sp-track-radio-group {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
+  gap: 8px;
+  width: 100%;
+  margin-top: 2px;
 }
 
 .sp-track-chip {
-  border: 1px solid var(--border-hairline, #E6E1D6);
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 10px;
+  border: 1px solid var(--border-subtle, #DBD5C7);
   background: #FFFFFF;
-  border-radius: 4px;
-  padding: 6px 12px;
+  border-radius: 6px;
+  font-family: var(--font-sans, "Plus Jakarta Sans", sans-serif);
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
-  color: var(--text-muted, #7A756D);
-  transition: all 0.15s;
+  color: var(--text-secondary, #484E49);
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.sp-track-chip:hover {
+  background: var(--bg-surface-alt, #F4F1EA);
+  border-color: var(--border-strong, #968F7E);
+  color: var(--text-main, #141715);
 }
 
 .sp-track-chip.active {
@@ -1168,13 +1269,90 @@
   color: #FFFFFF;
 }
 
+.sp-charter-modal .sp-members-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.sp-slider-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
 .sp-capacity-badge {
   font-family: var(--font-mono, "JetBrains Mono", monospace);
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  background: var(--bg-surface-warm, #F0ECE1);
+  background: var(--bg-surface-alt, #F4F1EA);
+  color: var(--text-secondary, #484E49);
+  border: 1px solid var(--border-hairline, #E6E1D6);
   padding: 2px 8px;
   border-radius: 4px;
+}
+
+.sp-slider {
+  width: 100%;
+  height: 6px;
+  border-radius: 9999px;
+  accent-color: var(--color-terracotta, #BA4A2B);
+  cursor: pointer;
+  margin: 4px 0 2px;
+}
+
+.sp-form-hint {
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--text-muted, #757D76);
+  margin: 4px 0 0 0;
+}
+
+.sp-charter-modal .sp-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid var(--border-hairline, #E6E1D6);
+  background: var(--bg-surface-alt, #F4F1EA);
+}
+
+.sp-charter-modal .sp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-sans, "Plus Jakarta Sans", sans-serif);
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 9px 18px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sp-charter-modal .sp-btn-ghost {
+  background: #FFFFFF;
+  color: var(--text-secondary, #484E49);
+  border: 1px solid var(--border-hairline, #E6E1D6);
+}
+
+.sp-charter-modal .sp-btn-ghost:hover {
+  background: var(--bg-canvas-subtle, #EFECE4);
+  color: var(--text-main, #141715);
+  border-color: var(--border-subtle, #DBD5C7);
+}
+
+.sp-charter-modal .sp-btn-primary {
+  background: var(--color-obsidian, #141715);
+  color: #FFFFFF;
+  border: 1px solid var(--color-obsidian, #141715);
+}
+
+.sp-charter-modal .sp-btn-primary:hover {
+  background: var(--primary-hover, #262B28);
 }
 
 /* Responsive */
